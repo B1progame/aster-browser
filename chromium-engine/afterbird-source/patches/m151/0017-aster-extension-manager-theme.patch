@@ -1,0 +1,97 @@
+diff --git a/chrome/browser/resources/extensions/extensions.html b/chrome/browser/resources/extensions/extensions.html
+index bd1ed0b2a1..3d1f221d9b 100644
+--- a/chrome/browser/resources/extensions/extensions.html
++++ b/chrome/browser/resources/extensions/extensions.html
+@@ -38,7 +38,8 @@
+       width: 100%;
+     }
+ 
+-    html[webui-refresh-2026] {
++    html[webui-refresh-2026],
++    html:not(#z):root {
+       background: var(--color-webui-page-background);
+     }
+   </style>
+diff --git a/chrome/browser/resources/extensions/shared_vars.css b/chrome/browser/resources/extensions/shared_vars.css
+index 2c4ab4018c..895ae2ca39 100644
+--- a/chrome/browser/resources/extensions/shared_vars.css
++++ b/chrome/browser/resources/extensions/shared_vars.css
+@@ -7,7 +7,39 @@
+  * #import=chrome://resources/cr_elements/cr_shared_vars.css.js
+  * #css_wrapper_metadata_end */
+ 
+-html {
++html:not(#z):root {
++  /* Aster's extension UI follows the browser's mint and charcoal palette. */
++  --cr-fallback-color-primary: #187656;
++  --cr-fallback-color-on-primary: #fff;
++  --cr-fallback-color-primary-container: #bfebd8;
++  --cr-fallback-color-on-primary-container: #12382b;
++  --cr-fallback-color-secondary-container: #d2e8dd;
++  --cr-fallback-color-on-secondary-container: #0c2018;
++  --cr-fallback-color-tonal-container: #d2e8dd;
++  --cr-fallback-color-on-tonal-container: #12382b;
++  --cr-fallback-color-tonal-outline: #187656;
++  --cr-fallback-color-outline: #6d8176;
++  --cr-fallback-color-surface: #f5f8f6;
++  --cr-fallback-color-surface1: #f0f5f2;
++  --cr-fallback-color-surface2: #e8f0eb;
++  --cr-focus-outline-color: #187656;
++  --cr-checked-color: #187656;
++  --cr-card-background-color: #f0f5f2;
++  --cr-card-border-radius: 16px;
++  --color-button-background-prominent: #187656;
++  --color-button-foreground-prominent: #fff;
++  --color-button-foreground: #187656;
++  --color-button-border: #187656;
++  --color-webui-page-background: #f3f5f6;
++  --color-button-background-tonal: #d2e8dd;
++  --color-button-foreground-tonal: #12382b;
++  --color-toggle-button-track-on: #187656;
++  --color-toggle-button-thumb-on: #fff;
++  --color-checkbox-foreground-checked: #187656;
++  --color-link-foreground-default: #187656;
++  --color-webui-card-background: #f0f5f2;
++  --color-sys-state-focus-ring: #187656;
++
+   /* Note: error-color is used for many warnings. There's also an orange-y
+    * warning color in 1 place. */
+   --error-color: var(--google-red-700);
+@@ -24,7 +56,36 @@ html {
+ }
+ 
+ @media (prefers-color-scheme: dark) {
+-  html {
++  html:not(#z):root {
++    --cr-fallback-color-primary: #70d7b4;
++    --cr-fallback-color-on-primary: #00382b;
++    --cr-fallback-color-primary-container: #00513d;
++    --cr-fallback-color-on-primary-container: #b8f0d7;
++    --cr-fallback-color-secondary-container: #374b42;
++    --cr-fallback-color-on-secondary-container: #d1e8dc;
++    --cr-fallback-color-tonal-container: #374b42;
++    --cr-fallback-color-on-tonal-container: #d1e8dc;
++    --cr-fallback-color-tonal-outline: #70d7b4;
++    --cr-fallback-color-outline: #82978c;
++    --cr-fallback-color-surface: #151a1e;
++    --cr-fallback-color-surface1: #1a2224;
++    --cr-fallback-color-surface2: #202724;
++    --cr-focus-outline-color: #70d7b4;
++    --cr-checked-color: #70d7b4;
++    --cr-card-background-color: #202724;
++    --color-button-background-prominent: #70d7b4;
++    --color-button-foreground-prominent: #00382b;
++    --color-button-foreground: #70d7b4;
++    --color-button-border: #70d7b4;
++    --color-webui-page-background: #17191d;
++    --color-button-background-tonal: #374b42;
++    --color-button-foreground-tonal: #d1e8dc;
++    --color-toggle-button-track-on: #70d7b4;
++    --color-toggle-button-thumb-on: #00382b;
++    --color-checkbox-foreground-checked: #70d7b4;
++    --color-link-foreground-default: #70d7b4;
++    --color-webui-card-background: #202724;
++    --color-sys-state-focus-ring: #70d7b4;
+     --panel-icon-color: var(--google-grey-500);
+     --error-color: var(--google-red-300);
+     --warning-color: var(--google-yellow-300);

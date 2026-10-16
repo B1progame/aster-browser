@@ -1,0 +1,14 @@
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPage.java b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPage.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPage.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPage.java
+@@ -666,8 +666,9 @@
+                         edgeToEdgeControllerSupplier,
+                         assumeNonNull(moduleRegistrySupplier).get());
+         if ("app.aster.chromium".equals(activity.getPackageName())) {
+             // Aster's NTP is focused on search and shortcuts; omit the external Discover feed.
+-            mFeedSurfaceProvider.getView().setVisibility(View.GONE);
++            ((FeedSurfaceCoordinator) mFeedSurfaceProvider)
++                    .getRecyclerView().setVisibility(View.GONE);
+         }
+         startupMetricsTracker.registerNtpViewObserver(mFeedSurfaceProvider.getView());
+     }

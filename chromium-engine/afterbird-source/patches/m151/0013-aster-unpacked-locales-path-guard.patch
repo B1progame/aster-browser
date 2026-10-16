@@ -1,0 +1,18 @@
+diff --git a/extensions/common/extension_l10n_util.cc b/extensions/common/extension_l10n_util.cc
+index 000000000000..000000000000 100644
+--- a/extensions/common/extension_l10n_util.cc
++++ b/extensions/common/extension_l10n_util.cc
+@@ -564,9 +564,12 @@ bool ShouldSkipValidation(const base::FilePath& locales_path,
+   // Since we use this string as a key in a base::DictValue, be paranoid about
+   // skipping any strings with '.'. This happens sometimes, for example with
+   // '.svn' directories.
+   base::FilePath relative_path;
+   if (!locales_path.AppendRelativePath(locale_path, &relative_path)) {
+-    NOTREACHED();
++    // Android's Storage Access Framework can expose unpacked extension paths
++    // that do not compare as descendants of the original root.
++    // Skip this optional locale validation rather than aborting the browser.
++    return true;
+   }
+   std::string subdir = relative_path.MaybeAsASCII();
+   if (subdir.empty())

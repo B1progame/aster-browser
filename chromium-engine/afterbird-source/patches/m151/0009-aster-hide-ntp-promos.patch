@@ -1,0 +1,34 @@
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+@@ -527,6 +527,4 @@
+         ViewStub composeplateViewStub = mNewTabPageLayout.findViewById(R.id.composeplate_view_stub);
+         ViewGroup composeplateView = (ViewGroup) composeplateViewStub.inflate();
+-        // Aster's home surface keeps the focus on search and saved shortcuts.
+-        composeplateView.setVisibility(View.GONE);
+         mComposeplateCoordinator = new ComposeplateCoordinator(composeplateView, mProfile);
+         mComposeplateCoordinator.setIncognitoClickListener(this::onIncognitoButtonClicked);
+@@ -541,5 +539,7 @@
+             mComposeplateCoordinator.applyWhiteBackground(/* apply= */ true);
+         }
++        // Aster's home surface keeps the focus on search and saved shortcuts.
++        composeplateView.setVisibility(View.GONE);
+     }
+ 
+     private void onComposeplateButtonClicked(View view) {
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPage.java b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPage.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPage.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPage.java
+@@ -663,7 +663,12 @@
+                         /* overScrollDisabled= */ false,
+                         createActionDelegate,
+                         mTabStripHeightSupplier,
+                         edgeToEdgeControllerSupplier,
+                         assumeNonNull(moduleRegistrySupplier).get());
++        if ("app.aster.chromium".equals(activity.getPackageName())) {
++            // Aster's NTP is focused on search and shortcuts; omit the external Discover feed.
++            ((FeedSurfaceCoordinator) mFeedSurfaceProvider)
++                    .getRecyclerView().setVisibility(View.GONE);
++        }
+         startupMetricsTracker.registerNtpViewObserver(mFeedSurfaceProvider.getView());
+     }

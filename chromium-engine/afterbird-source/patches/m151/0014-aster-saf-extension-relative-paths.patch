@@ -1,0 +1,30 @@
+diff --git a/base/files/file_enumerator_posix.cc b/base/files/file_enumerator_posix.cc
+--- a/base/files/file_enumerator_posix.cc
++++ b/base/files/file_enumerator_posix.cc
+@@ -191,7 +191,11 @@ FilePath FileEnumerator::Next() {
+         for (auto& info : directory_entries_) {
+           info.subdirs_ = subdirs_;
+           if (info.IsDirectory()) {
+-            pending_paths_.push(info.content_uri_);
++            // Keep paths from a selected Storage Access Framework tree in
++            // virtual-document form so callers can append child paths (for
++            // example, extensions/_locales/en/messages.json).
++            pending_paths_.push(root_path_.IsVirtualDocumentPath()
++                                    ? root_path_.Append(info.GetName())
++                                    : info.content_uri_);
+             pending_subdirs_.push(subdirs_);
+             pending_subdirs_.top().push_back(info.GetName().value());
+           }
+@@ -305,9 +309,14 @@ FilePath FileEnumerator::Next() {
+ #if BUILDFLAG(IS_ANDROID)
+-  if (root_path_.IsContentUri() || root_path_.IsVirtualDocumentPath()) {
++  if (root_path_.IsVirtualDocumentPath()) {
++    // Return an appendable path under the selected SAF tree. The File APIs
++    // resolve it to a content URI when reading or querying the document.
++    return root_path_.Append(
++        directory_entries_[current_directory_entry_].GetName());
++  }
++  if (root_path_.IsContentUri()) {
+     return directory_entries_[current_directory_entry_].content_uri_;
+   }
+ #endif

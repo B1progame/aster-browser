@@ -1,0 +1,21 @@
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPage.java b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPage.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPage.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPage.java
+@@ -668,6 +668,1 @@
+-        if ("app.aster.chromium".equals(activity.getPackageName())) {
+-            // Aster's NTP is focused on search and shortcuts; omit the external Discover feed.
+-            ((FeedSurfaceCoordinator) mFeedSurfaceProvider)
+-                    .getRecyclerView().setVisibility(View.GONE);
+-        }
+         startupMetricsTracker.registerNtpViewObserver(mFeedSurfaceProvider.getView());
+diff --git a/chrome/android/feed/core/java/src/org/chromium/chrome/browser/feed/FeedSurfaceMediator.java b/chrome/android/feed/core/java/src/org/chromium/chrome/browser/feed/FeedSurfaceMediator.java
+--- a/chrome/android/feed/core/java/src/org/chromium/chrome/browser/feed/FeedSurfaceMediator.java
++++ b/chrome/android/feed/core/java/src/org/chromium/chrome/browser/feed/FeedSurfaceMediator.java
+@@ -405,4 +405,6 @@
+-        mFeedEnabled = FeedFeatures.isFeedEnabled(mProfile);
++        mFeedEnabled =
++                FeedFeatures.isFeedEnabled(mProfile)
++                        && !"app.aster.chromium".equals(mContext.getPackageName());
+         if (mFeedEnabled && mStreamHolder != null) {
+             return;
+         }

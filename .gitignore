@@ -1,0 +1,25 @@
+# Local Android/Gradle/IDE state; keep the portable project sources.
+.gradle/
+.gradle-user/
+.kotlin/
+.tools/
+.android-avd/
+.android-user/
+build/
+app/build/
+
+# Android packages are kept in dist/ locally, but are too large for GitHub Git
+# objects. Publish them as release assets when a release is prepared.
+dist/*.apk
+dist/*.aab
+
+# Chromium build sources are separate working checkouts in v1. A clean source
+# snapshot is copied to a non-nested path for this repository below.
+chromium-engine/afterbird/
+chromium-engine/bare-browser/
+chromium-engine/depot_tools/
+
+# Temporary emulator captures and UI hierarchy dumps in the project root.
+.aster-*
+aster-theme-final.png
+*.log

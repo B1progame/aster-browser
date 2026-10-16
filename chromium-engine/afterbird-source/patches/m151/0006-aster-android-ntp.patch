@@ -1,0 +1,185 @@
+diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/android/java/res/layout/new_tab_page_layout.xml
+index 052f7c79ab..93cad9fe8b 100644
+--- a/chrome/android/java/res/layout/new_tab_page_layout.xml
++++ b/chrome/android/java/res/layout/new_tab_page_layout.xml
+@@ -19,9 +19,56 @@ found in the LICENSE file.
+     android:paddingTop="@dimen/toolbar_height_no_shadow"
+     android:visibility="gone" >
+ 
++    <!-- Aster brand introduction for Android NTP -->
++    <LinearLayout
++        android:id="@+id/aster_brand_intro"
++        android:tag="aster-brand-intro"
++        android:layout_width="match_parent"
++        android:layout_height="wrap_content"
++        android:layout_marginStart="28dp"
++        android:layout_marginTop="20dp"
++        android:layout_marginEnd="28dp"
++        android:layout_marginBottom="10dp"
++        android:orientation="vertical">
++
++        <TextView
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:text="ASTER  ·  PRIVATE BY DEFAULT"
++            android:textColor="@color/aster_brand_accent"
++            android:textSize="12sp"
++            android:textStyle="bold" />
++
++        <TextView
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_marginTop="14dp"
++            android:text="Browse with"
++            android:textColor="@color/aster_brand_primary_text"
++            android:textSize="30sp"
++            android:textStyle="bold" />
++
++        <TextView
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:text="room to think."
++            android:textColor="@color/aster_brand_accent"
++            android:textSize="30sp"
++            android:textStyle="bold" />
++
++        <TextView
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_marginTop="8dp"
++            android:text="A quieter corner of the web, with your extensions close at hand."
++            android:textColor="@color/aster_brand_secondary_text"
++            android:textSize="15sp" />
++    </LinearLayout>
++
+     <!-- Search provider logo -->
+     <ViewStub
+         android:id="@+id/logo_view_stub"
++        android:visibility="gone"
+         android:layout_width="match_parent"
+         android:layout_height="wrap_content"
+         android:layout="@layout/logo_view_layout" />
+diff --git a/chrome/android/java/res/values-night/colors.xml b/chrome/android/java/res/values-night/colors.xml
+index 56e5ee6fb7..e429c7f907 100644
+--- a/chrome/android/java/res/values-night/colors.xml
++++ b/chrome/android/java/res/values-night/colors.xml
+@@ -25,4 +25,7 @@ found in the LICENSE file.
+     <color name="tab_recording_media_color">@color/google_red_300</color>
+     <color name="tab_sharing_media_color">@color/baseline_primary_80</color>
+     <color name="tab_pip_media_color">@color/baseline_primary_80</color>
++    <color name="aster_brand_accent">#70D7B4</color>
++    <color name="aster_brand_primary_text">#F0F4F2</color>
++    <color name="aster_brand_secondary_text">#ABB7B4</color>
+ </resources>
+diff --git a/chrome/android/java/res/values/colors.xml b/chrome/android/java/res/values/colors.xml
+index 7b707d83a4..cb4cf3a0d0 100644
+--- a/chrome/android/java/res/values/colors.xml
++++ b/chrome/android/java/res/values/colors.xml
+@@ -88,4 +88,7 @@ found in the LICENSE file.
+     <color name="tab_recording_media_color">@color/google_red_600</color>
+     <color name="tab_sharing_media_color">@color/tab_group_color_picker_blue_dark</color>
+     <color name="tab_pip_media_color">@color/tab_group_color_picker_blue_dark</color>
++    <color name="aster_brand_accent">#187656</color>
++    <color name="aster_brand_primary_text">#20272A</color>
++    <color name="aster_brand_secondary_text">#596467</color>
+ </resources>
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MultiColumnSettings.java b/chrome/android/java/src/org/chromium/chrome/browser/settings/MultiColumnSettings.java
+index 75cc1776d5..a318c94ccf 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/settings/MultiColumnSettings.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/settings/MultiColumnSettings.java
+@@ -109,8 +109,7 @@ public class MultiColumnSettings extends PreferenceHeaderFragmentCompat
+         return mMainSettings;
+     }
+ 
+-    public MainSettings getMainSettings() {
+-        assertNonNull(mMainSettings);
++    public @Nullable MainSettings getMainSettings() {
+         return mMainSettings;
+     }
+ 
+diff --git a/chrome/browser/ui/android/logo/java/src/org/chromium/chrome/browser/logo/LegacyLogoViewBinder.java b/chrome/browser/ui/android/logo/java/src/org/chromium/chrome/browser/logo/LegacyLogoViewBinder.java
+index 8f7d24701f..cf8a8b0ab4 100644
+--- a/chrome/browser/ui/android/logo/java/src/org/chromium/chrome/browser/logo/LegacyLogoViewBinder.java
++++ b/chrome/browser/ui/android/logo/java/src/org/chromium/chrome/browser/logo/LegacyLogoViewBinder.java
+@@ -15,6 +15,21 @@ import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
+ @NullMarked
+ class LegacyLogoViewBinder
+         implements PropertyModelChangeProcessor.ViewBinder<PropertyModel, View, PropertyKey> {
++    private static boolean isAsterNtp(View view) {
++        View parent = view;
++        while (parent != null) {
++            if (parent instanceof android.view.ViewGroup
++                    && ((android.view.ViewGroup) parent)
++                                    .findViewWithTag("aster-brand-intro")
++                            != null) {
++                return true;
++            }
++            android.view.ViewParent next = parent.getParent();
++            parent = next instanceof View ? (View) next : null;
++        }
++        return false;
++    }
++
+     @Override
+     public final void bind(PropertyModel model, View view, PropertyKey propertyKey) {
+         LegacyLogoView logoView = (LegacyLogoView) view;
+@@ -30,7 +45,8 @@ class LegacyLogoViewBinder
+         } else if (LogoProperties.SET_END_FADE_ANIMATION == propertyKey) {
+             logoView.endFadeAnimation();
+         } else if (LogoProperties.VISIBILITY == propertyKey) {
+-            logoView.setVisibility(model.get(LogoProperties.VISIBILITY) ? View.VISIBLE : View.GONE);
++            boolean shouldShow = model.get(LogoProperties.VISIBILITY) && !isAsterNtp(view);
++            logoView.setVisibility(shouldShow ? View.VISIBLE : View.GONE);
+         } else if (LogoProperties.ANIMATION_ENABLED == propertyKey) {
+             logoView.setAnimationEnabled(model.get(LogoProperties.ANIMATION_ENABLED));
+         } else if (LogoProperties.LOGO_CLICK_HANDLER == propertyKey) {
+diff --git a/chrome/browser/ui/android/logo/java/src/org/chromium/chrome/browser/logo/LogoContainerViewBinder.java b/chrome/browser/ui/android/logo/java/src/org/chromium/chrome/browser/logo/LogoContainerViewBinder.java
+index 76c716451d..607096d920 100644
+--- a/chrome/browser/ui/android/logo/java/src/org/chromium/chrome/browser/logo/LogoContainerViewBinder.java
++++ b/chrome/browser/ui/android/logo/java/src/org/chromium/chrome/browser/logo/LogoContainerViewBinder.java
+@@ -15,6 +15,21 @@ import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
+ @NullMarked
+ class LogoContainerViewBinder
+         implements PropertyModelChangeProcessor.ViewBinder<PropertyModel, View, PropertyKey> {
++    private static boolean isAsterNtp(View view) {
++        View parent = view;
++        while (parent != null) {
++            if (parent instanceof android.view.ViewGroup
++                    && ((android.view.ViewGroup) parent)
++                                    .findViewWithTag("aster-brand-intro")
++                            != null) {
++                return true;
++            }
++            android.view.ViewParent next = parent.getParent();
++            parent = next instanceof View ? (View) next : null;
++        }
++        return false;
++    }
++
+     @Override
+     public final void bind(PropertyModel model, View view, PropertyKey propertyKey) {
+         LogoContainerView logoContainerView = (LogoContainerView) view;
+@@ -30,8 +45,8 @@ class LogoContainerViewBinder
+         } else if (LogoProperties.SET_END_FADE_ANIMATION == propertyKey) {
+             logoContainerView.endFadeAnimation();
+         } else if (LogoProperties.VISIBILITY == propertyKey) {
+-            logoContainerView.setVisibility(
+-                    model.get(LogoProperties.VISIBILITY) ? View.VISIBLE : View.GONE);
++            boolean shouldShow = model.get(LogoProperties.VISIBILITY) && !isAsterNtp(view);
++            logoContainerView.setVisibility(shouldShow ? View.VISIBLE : View.GONE);
+         } else if (LogoProperties.ANIMATION_ENABLED == propertyKey) {
+             logoContainerView.setAnimationEnabled(model.get(LogoProperties.ANIMATION_ENABLED));
+         } else if (LogoProperties.LOGO_CLICK_HANDLER == propertyKey) {
+diff --git a/chrome/browser/ui/android/night_mode/java/src/org/chromium/chrome/browser/night_mode/NightModeUtils.java b/chrome/browser/ui/android/night_mode/java/src/org/chromium/chrome/browser/night_mode/NightModeUtils.java
+index 2b741c2fb0..0a55e46a71 100644
+--- a/chrome/browser/ui/android/night_mode/java/src/org/chromium/chrome/browser/night_mode/NightModeUtils.java
++++ b/chrome/browser/ui/android/night_mode/java/src/org/chromium/chrome/browser/night_mode/NightModeUtils.java
+@@ -107,7 +107,7 @@ public class NightModeUtils {
+     public static @ThemeType int getThemeSetting() {
+         int userSetting = ChromeSharedPreferences.getInstance().readInt(UI_THEME_SETTING, -1);
+         if (userSetting == -1) {
+-            return ThemeType.SYSTEM_DEFAULT;
++            return ThemeType.DARK;
+         } else {
+             return userSetting;
+         }

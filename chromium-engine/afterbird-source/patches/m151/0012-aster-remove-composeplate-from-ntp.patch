@@ -1,0 +1,12 @@
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+@@ -520,6 +520,8 @@
+         if (mIsComposeplateViewInitialized) return;
+
+         mIsComposeplateViewInitialized = true;
++        if ("app.aster.chromium".equals(mActivity.getPackageName())) return;
++
+ 
+         boolean shouldApplyWhiteBackgroundOnSearchBox =
+                 NtpCustomizationUtils.shouldApplyWhiteBackgroundOnSearchBox();

@@ -1,0 +1,16 @@
+# Aster extension-engine proof build for the current x86_64 Android emulator.
+# This keeps the upstream Chromium desktop-android extension subsystem and
+# allows the emulator harness to load unpacked test extensions.
+target_os = "android"
+target_cpu = "x64"
+is_desktop_android = true
+is_debug = false
+is_official_build = false
+is_java_debug = true
+symbol_level = 0
+blink_symbol_level = 0
+dcheck_always_on = false
+chrome_public_manifest_package = "app.aster.chromium"
+treat_warnings_as_errors = false
+disable_android_lint = true
+
