@@ -1,0 +1,59 @@
+diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/android/java/res/layout/new_tab_page_layout.xml
+--- a/chrome/android/java/res/layout/new_tab_page_layout.xml
++++ b/chrome/android/java/res/layout/new_tab_page_layout.xml
+@@ -103,7 +103,9 @@
+             android:layout_width="42dp"
+             android:layout_height="42dp"
+             android:contentDescription="@null"
+-            android:src="@mipmap/app_icon" />
++            android:background="@drawable/aster_ntp_extension_icon_background"
++            android:padding="6dp"
++            android:src="@drawable/aster_ntp_logo" />
+ 
+         <LinearLayout
+             android:layout_width="0dp"
+diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_java_resources.gni
+--- a/chrome/android/chrome_java_resources.gni
++++ b/chrome/android/chrome_java_resources.gni
+@@ -254,5 +254,7 @@ chrome_java_resources = [
+   "java/res/drawable/arrow_forward_24px.xml",
+   "java/res/drawable/arrow_up.xml",
+   "java/res/drawable/aster_ntp_extension_card.xml",
++  "java/res/drawable/aster_ntp_extension_icon_background.xml",
++  "java/res/drawable/aster_ntp_logo.xml",
+   "java/res/drawable/auto_pip_permission_dialog_background.xml",
+   "java/res/drawable/autofill_save_card_credit_card_surface.xml",
+diff --git a/chrome/android/java/res/drawable/aster_ntp_extension_icon_background.xml b/chrome/android/java/res/drawable/aster_ntp_extension_icon_background.xml
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/res/drawable/aster_ntp_extension_icon_background.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++    <solid android:color="#10191A" />
++    <stroke android:width="1dp" android:color="#345448" />
++    <corners android:radius="11dp" />
++</shape>
+diff --git a/chrome/android/java/res/drawable/aster_ntp_logo.xml b/chrome/android/java/res/drawable/aster_ntp_logo.xml
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/res/drawable/aster_ntp_logo.xml
+@@ -0,0 +1,18 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="108dp"
++    android:height="108dp"
++    android:viewportWidth="108"
++    android:viewportHeight="108">
++    <path android:fillColor="#53DFA9" android:pathData="M54,14 L48,43 L54,54 Z" />
++    <path android:fillColor="#A0FFD2" android:pathData="M54,14 L61,43 L54,54 Z" />
++    <path android:fillColor="#A0FFD2" android:pathData="M94,54 L61,48 L54,54 Z" />
++    <path android:fillColor="#53DFA9" android:pathData="M94,54 L61,61 L54,54 Z" />
++    <path android:fillColor="#53DFA9" android:pathData="M54,94 L48,61 L54,54 Z" />
++    <path android:fillColor="#A0FFD2" android:pathData="M54,94 L61,61 L54,54 Z" />
++    <path android:fillColor="#A0FFD2" android:pathData="M14,54 L47,48 L54,54 Z" />
++    <path android:fillColor="#53DFA9" android:pathData="M14,54 L47,61 L54,54 Z" />
++    <path android:fillColor="#62E9B3" android:pathData="M78,29 L68,43 L54,54 L62,40 Z" />
++    <path android:fillColor="#A0FFD2" android:pathData="M30,29 L40,43 L54,54 L46,40 Z" />
++    <path android:fillColor="#A0FFD2" android:pathData="M78,79 L68,65 L54,54 L62,68 Z" />
++    <path android:fillColor="#62E9B3" android:pathData="M30,79 L40,65 L54,54 L46,68 Z" />
++</vector>

@@ -1,0 +1,8 @@
+# Afterbird version
+# Versioning: MAJOR.MINOR.BUILD.PATCH
+# Bump MINOR for releases with new capabilities, PATCH for fixes.
+
+MAJOR=1
+MINOR=9
+BUILD=0
+PATCH=1

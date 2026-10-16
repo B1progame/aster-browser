@@ -1,0 +1,30 @@
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeBaseAppCompatActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/ChromeBaseAppCompatActivity.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ChromeBaseAppCompatActivity.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ChromeBaseAppCompatActivity.java
+@@ -834,6 +834,8 @@
+         if (primaryColor != null) {
+             NtpCustomizationUtils.applyDynamicColorToActivity(this, primaryColor);
+         } else {
+-            DynamicColors.applyToActivityIfAvailable(this);
++            // Aster: use the brand mint as the seed instead of the device wallpaper color.
++            NtpCustomizationUtils.applyDynamicColorToActivity(
++                    this, getColor(R.color.aster_brand_accent));
+         }
+     }
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+@@ -527,4 +527,6 @@
+         ViewStub composeplateViewStub = mNewTabPageLayout.findViewById(R.id.composeplate_view_stub);
+         ViewGroup composeplateView = (ViewGroup) composeplateViewStub.inflate();
++        // Aster's home surface keeps the focus on search and saved shortcuts.
++        composeplateView.setVisibility(View.GONE);
+         mComposeplateCoordinator = new ComposeplateCoordinator(composeplateView, mProfile);
+         mComposeplateCoordinator.setIncognitoClickListener(this::onIncognitoButtonClicked);
+@@ -1192,4 +1194,5 @@
+     void onHomeModulesShown(boolean isVisible) {
+         assumeNonNull(mHomeModulesContainer);
+-        mHomeModulesContainer.setVisibility(isVisible ? View.VISIBLE : View.GONE);
++        // Aster uses a quieter new-tab page without account, tips, or Discover promos.
++        mHomeModulesContainer.setVisibility(View.GONE);
+     }

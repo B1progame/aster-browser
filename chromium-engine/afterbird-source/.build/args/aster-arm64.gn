@@ -1,0 +1,14 @@
+# Aster Chromium extension-engine build for ARM64 Android phones and Quest.
+# Uses Chromium's upstream desktop-Android extension runtime.
+target_os = "android"
+target_cpu = "arm64"
+is_desktop_android = true
+is_debug = false
+is_official_build = false
+is_java_debug = true
+symbol_level = 0
+blink_symbol_level = 0
+dcheck_always_on = false
+chrome_public_manifest_package = "app.aster.chromium"
+treat_warnings_as_errors = false
+disable_android_lint = true

@@ -1,0 +1,74 @@
+diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/android/java/res/layout/new_tab_page_layout.xml
+--- a/chrome/android/java/res/layout/new_tab_page_layout.xml
++++ b/chrome/android/java/res/layout/new_tab_page_layout.xml
+@@ -77,5 +77,6 @@
+     <ViewStub
+         android:id="@+id/composeplate_view_stub"
++        android:visibility="gone"
+         android:layout_width="match_parent"
+         android:layout_height="@dimen/composeplate_view_height"
+         android:layout_marginTop="@dimen/composeplate_view_margin_top"
+@@ -101,5 +102,6 @@
+     <ViewStub
+         android:id="@+id/signin_promo_view_container_stub"
++        android:visibility="gone"
+         android:layout_width="match_parent"
+         android:layout_height="wrap_content"
+         android:layout="@layout/signin_promo_view_new_tab_page" />
+@@ -108,5 +110,6 @@
+     <ViewStub
+         android:id="@+id/home_modules_recycler_view_stub"
++        android:visibility="gone"
+         android:layout_width="match_parent"
+         android:layout_height="match_parent"
+         android:layout_marginTop="@dimen/ntp_section_top_margin"
+diff --git a/components/browser_ui/styles/android/java/res/values/themes.xml b/components/browser_ui/styles/android/java/res/values/themes.xml
+--- a/components/browser_ui/styles/android/java/res/values/themes.xml
++++ b/components/browser_ui/styles/android/java/res/values/themes.xml
+@@ -30,3 +30,14 @@
+     <style name="ThemeOverlay.BrowserUI.DynamicColors" parent="ThemeOverlay.Material3Expressive.DynamicColors.DayNight">
++        <!-- Aster: keep browser controls on-brand instead of inheriting the device wallpaper hue. -->
++        <item name="colorPrimary">@color/aster_accent</item>
++        <item name="colorPrimaryInverse">@color/aster_accent_inverse</item>
++        <item name="colorOnPrimary">@color/aster_on_accent</item>
++        <item name="colorPrimaryContainer">@color/aster_accent_container</item>
++        <item name="colorOnPrimaryContainer">@color/aster_on_accent_container</item>
++        <item name="colorSecondary">@color/aster_secondary</item>
++        <item name="colorOnSecondary">@color/aster_on_secondary</item>
++        <item name="colorSecondaryContainer">@color/aster_secondary_container</item>
++        <item name="colorOnSecondaryContainer">@color/aster_on_secondary_container</item>
++        <item name="colorAccent">@color/aster_accent</item>
+         <item name="elevationOverlayColor">?attr/colorPrimary</item>
+         <item name="elevationOverlayAccentColor">@android:color/transparent</item>
+diff --git a/components/browser_ui/styles/android/java/res/values/colors.xml b/components/browser_ui/styles/android/java/res/values/colors.xml
+--- a/components/browser_ui/styles/android/java/res/values/colors.xml
++++ b/components/browser_ui/styles/android/java/res/values/colors.xml
+@@ -11,4 +11,13 @@
+     <!-- Text colors -->
++    <color name="aster_accent">#187656</color>
++    <color name="aster_accent_inverse">#70D7B4</color>
++    <color name="aster_on_accent">#FFFFFF</color>
++    <color name="aster_accent_container">#BFEBD8</color>
++    <color name="aster_on_accent_container">#12382B</color>
++    <color name="aster_secondary">#4F635A</color>
++    <color name="aster_on_secondary">#FFFFFF</color>
++    <color name="aster_secondary_container">#D2E8DD</color>
++    <color name="aster_on_secondary_container">#0C2018</color>
+     <color name="default_primary_color">#F2F2F2</color>
+     <color name="input_underline_error_color">#D32F2F</color>
+     <color name="explanation_text_color">#909090</color>
+diff --git a/components/browser_ui/styles/android/java/res/values-night/colors.xml b/components/browser_ui/styles/android/java/res/values-night/colors.xml
+--- a/components/browser_ui/styles/android/java/res/values-night/colors.xml
++++ b/components/browser_ui/styles/android/java/res/values-night/colors.xml
+@@ -9,2 +9,11 @@
+ <resources>
++    <color name="aster_accent">#70D7B4</color>
++    <color name="aster_accent_inverse">#187656</color>
++    <color name="aster_on_accent">#00382B</color>
++    <color name="aster_accent_container">#00513D</color>
++    <color name="aster_on_accent_container">#B8F0D7</color>
++    <color name="aster_secondary">#B5CCC1</color>
++    <color name="aster_on_secondary">#20352D</color>
++    <color name="aster_secondary_container">#374B42</color>
++    <color name="aster_on_secondary_container">#D1E8DC</color>
+     <!-- Surface tint -->
