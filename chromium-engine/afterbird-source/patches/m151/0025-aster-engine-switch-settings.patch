@@ -1,0 +1,77 @@
+diff --git a/chrome/android/java/AndroidManifest.xml b/chrome/android/java/AndroidManifest.xml
+--- a/chrome/android/java/AndroidManifest.xml
++++ b/chrome/android/java/AndroidManifest.xml
+@@ -17,6 +17,9 @@
+     {% endif %}
+     tools:ignore="MissingVersion">
+     <!-- android:versionCode and android:versionName is set through gyp. See build/common.gypi -->
++    <queries>
++        <package android:name="app.aster.browser" />
++    </queries>
+
+     <uses-feature android:glEsVersion="0x00030000" />
+
+diff --git a/chrome/android/java/res/xml/main_preferences.xml b/chrome/android/java/res/xml/main_preferences.xml
+--- a/chrome/android/java/res/xml/main_preferences.xml
++++ b/chrome/android/java/res/xml/main_preferences.xml
+@@ -148,4 +148,9 @@ found in the LICENSE file.
+         android:title="Aster updates"
+         android:summary="Check for and install the latest browser APK"/>
++    <Preference
++        android:key="aster_engine"
++        android:order="33"
++        android:title="Browser engine"
++        android:summary="Chromium · Chrome extensions — switch to GeckoView"/>
+
+ </PreferenceScreen>
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
+@@ -365,5 +365,47 @@ public class MainSettings extends ChromeBaseSettingsFragment
+                             return true;
+                         });
++        findPreference("aster_engine")
++                .setOnPreferenceClickListener(
++                        preference -> {
++                            onPreferenceSelected(preference);
++                            Activity activity = getActivity();
++                            if (activity == null) return true;
++                            Intent launchIntent =
++                                    activity.getPackageManager()
++                                            .getLaunchIntentForPackage("app.aster.browser");
++                            if (launchIntent == null) {
++                                new AlertDialog.Builder(activity)
++                                        .setTitle("GeckoView is not installed")
++                                        .setMessage(
++                                                "Install the Aster GeckoView build to use Firefox add-ons."
++                                                        + " Chromium tabs and extensions stay saved here.")
++                                        .setPositiveButton("Close", null)
++                                        .show();
++                            } else {
++                                org.chromium.chrome.browser.app.ChromeActivity chromeActivity =
++                                        (org.chromium.chrome.browser.app.ChromeActivity) activity;
++                                org.chromium.chrome.browser.tabmodel.TabModel model =
++                                        chromeActivity.getTabModelSelector().getModel(false);
++                                java.util.ArrayList<String> urls = new java.util.ArrayList<>();
++                                java.util.ArrayList<String> titles = new java.util.ArrayList<>();
++                                int active = 0;
++                                for (int i = 0; i < model.getCount(); i++) {
++                                    org.chromium.chrome.browser.tab.Tab tab = model.getTabAt(i);
++                                    if (tab == null || tab.getUrl() == null) continue;
++                                    String url = tab.getUrl().getSpec();
++                                    if (!url.startsWith("https://") && !url.startsWith("http://")) continue;
++                                    if (i == model.index()) active = urls.size();
++                                    urls.add(url);
++                                    titles.add(tab.getTitle() == null ? url : tab.getTitle().toString());
++                                }
++                                launchIntent.putStringArrayListExtra("aster_tabs", urls);
++                                launchIntent.putStringArrayListExtra("aster_tab_titles", titles);
++                                launchIntent.putExtra("aster_active_tab", active);
++                                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
++                                activity.startActivity(launchIntent);
++                            }
++                            return true;
++                        });
+
+         IdentityManager identityManager =
+                 IdentityServicesProvider.get().getIdentityManager(getProfile());

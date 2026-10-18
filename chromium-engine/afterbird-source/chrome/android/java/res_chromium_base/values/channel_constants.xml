@@ -11,4 +11,6 @@ found in the LICENSE file.
     <string name="bookmark_widget_title" translatable="false">Aster bookmarks</string>
     <string name="search_widget_title" translatable="false">Aster search</string>
     <string name="quick_action_search_widget_title" translatable="false">Aster quick action search</string>
+    <!-- Bump this with the matching public GitHub release tag. -->
+    <string name="aster_release_version" translatable="false">2.1.0</string>
 </resources>

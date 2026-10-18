@@ -1,0 +1,126 @@
+diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/android/java/res/layout/new_tab_page_layout.xml
+--- a/chrome/android/java/res/layout/new_tab_page_layout.xml
++++ b/chrome/android/java/res/layout/new_tab_page_layout.xml
+@@ -21,2 +21,3 @@
+     android:paddingTop="@dimen/toolbar_height_no_shadow"
+-    android:visibility="gone" >
++    android:visibility="gone"
++    android:background="@color/aster_ntp_page_surface">
+@@ -31,4 +32,9 @@
+         android:layout_marginTop="20dp"
+         android:layout_marginEnd="28dp"
+         android:layout_marginBottom="10dp"
++        android:background="@drawable/aster_ntp_hero_surface"
++        android:paddingStart="20dp"
++        android:paddingTop="18dp"
++        android:paddingEnd="20dp"
++        android:paddingBottom="18dp"
+         android:orientation="vertical">
+@@ -46,5 +52,6 @@
+         <TextView
++            android:id="@+id/aster_brand_title"
+             android:layout_width="wrap_content"
+             android:layout_height="wrap_content"
+             android:layout_marginTop="14dp"
+             android:text="Browse with"
+@@ -56,4 +63,5 @@
+         <TextView
++            android:id="@+id/aster_brand_title_accent"
+             android:layout_width="wrap_content"
+             android:layout_height="wrap_content"
+             android:text="room to think."
+diff --git a/chrome/android/java/res/values/colors.xml b/chrome/android/java/res/values/colors.xml
+--- a/chrome/android/java/res/values/colors.xml
++++ b/chrome/android/java/res/values/colors.xml
+@@ -90,6 +90,9 @@
+     <color name="aster_brand_accent">#187656</color>
+     <color name="aster_brand_primary_text">#20272A</color>
+     <color name="aster_brand_secondary_text">#596467</color>
+     <color name="aster_ntp_card_surface">#F0F5F2</color>
+     <color name="aster_ntp_card_border">#D8E4DD</color>
++    <color name="aster_ntp_page_surface">#F2F5F3</color>
++    <color name="aster_ntp_hero_surface">#FFFFFF</color>
++    <color name="aster_ntp_hero_border">#DCE5E0</color>
+ </resources>
+diff --git a/chrome/android/java/res/values-night/colors.xml b/chrome/android/java/res/values-night/colors.xml
+--- a/chrome/android/java/res/values-night/colors.xml
++++ b/chrome/android/java/res/values-night/colors.xml
+@@ -28,6 +28,9 @@
+     <color name="aster_brand_accent">#70D7B4</color>
+     <color name="aster_brand_primary_text">#F0F4F2</color>
+     <color name="aster_brand_secondary_text">#ABB7B4</color>
+     <color name="aster_ntp_card_surface">#202724</color>
+     <color name="aster_ntp_card_border">#303B36</color>
++    <color name="aster_ntp_page_surface">#111715</color>
++    <color name="aster_ntp_hero_surface">#1B2420</color>
++    <color name="aster_ntp_hero_border">#303D36</color>
+ </resources>
+diff --git a/chrome/android/java/res/drawable/aster_ntp_hero_surface.xml b/chrome/android/java/res/drawable/aster_ntp_hero_surface.xml
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/res/drawable/aster_ntp_hero_surface.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
++    <solid android:color="@color/aster_ntp_hero_surface" />
++    <stroke android:width="1dp" android:color="@color/aster_ntp_hero_border" />
++    <corners android:radius="24dp" />
++</shape>
+diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_java_resources.gni
+--- a/chrome/android/chrome_java_resources.gni
++++ b/chrome/android/chrome_java_resources.gni
+@@ -256,1 +256,2 @@
+   "java/res/drawable/aster_ntp_extension_card.xml",
++  "java/res/drawable/aster_ntp_hero_surface.xml",
+diff --git a/chrome/browser/ui/android/ntp/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java b/chrome/browser/ui/android/ntp/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+--- a/chrome/browser/ui/android/ntp/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
++++ b/chrome/browser/ui/android/ntp/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+@@ -395,4 +395,48 @@
+         updateSearchBoxTwoSideMargin();
+         initializeLogoCoordinator();
+         if ("app.aster.chromium".equals(mActivity.getPackageName())) {
++            mNewTabPageLayout.setBackgroundColor(
++                    mActivity.getColor(R.color.aster_ntp_page_surface));
++            View quickAccessSurface = mNewTabPageLayout.findViewById(R.id.query_tiles);
++            if (quickAccessSurface != null) {
++                quickAccessSurface.setBackgroundColor(
++                        mActivity.getColor(R.color.aster_ntp_page_surface));
++            }
++            // Keep the full NTP viewport opaque when a Chromium theme supplies a wallpaper.
++            // The theme still controls the Aster accent; the text and cards stay readable.
++            android.view.View ntpSurface = mNewTabPageLayout;
++            while (ntpSurface != null) {
++                ntpSurface.setBackgroundColor(
++                        mActivity.getColor(R.color.aster_ntp_page_surface));
++                if (ntpSurface.getId() == android.R.id.content) break;
++                android.view.ViewParent parent = ntpSurface.getParent();
++                ntpSurface = parent instanceof android.view.View
++                        ? (android.view.View) parent : null;
++            }
++            int screenWidthDp = mActivity.getResources().getConfiguration().screenWidthDp;
++            int sideMarginDp = screenWidthDp <= 600 ? 18 : Math.max(24, (screenWidthDp - 840) / 2);
++            int sideMarginPx = Math.round(
++                    sideMarginDp * mActivity.getResources().getDisplayMetrics().density);
++            for (int id : new int[] {
++                R.id.aster_brand_intro,
++                R.id.aster_extensions_shortcut,
++                R.id.aster_update_shortcut,
++                R.id.aster_gecko_shortcut
++            }) {
++                View item = mNewTabPageLayout.findViewById(id);
++                if (item != null && item.getLayoutParams()
++                        instanceof android.view.ViewGroup.MarginLayoutParams) {
++                    android.view.ViewGroup.MarginLayoutParams params =
++                            (android.view.ViewGroup.MarginLayoutParams) item.getLayoutParams();
++                    params.setMarginStart(sideMarginPx);
++                    params.setMarginEnd(sideMarginPx);
++                    item.setLayoutParams(params);
++                }
++            }
++            float headingSizeSp = screenWidthDp >= 900 ? 36f : screenWidthDp >= 600 ? 31f : 27f;
++            android.widget.TextView title = mNewTabPageLayout.findViewById(R.id.aster_brand_title);
++            android.widget.TextView accentTitle =
++                    mNewTabPageLayout.findViewById(R.id.aster_brand_title_accent);
++            if (title != null) title.setTextSize(headingSizeSp);
++            if (accentTitle != null) accentTitle.setTextSize(headingSizeSp);
+             View geckoShortcut = mNewTabPageLayout.findViewById(R.id.aster_gecko_shortcut);

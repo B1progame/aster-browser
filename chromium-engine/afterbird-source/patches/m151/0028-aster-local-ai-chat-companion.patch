@@ -1,0 +1,114 @@
+diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/android/java/res/layout/new_tab_page_layout.xml
+--- a/chrome/android/java/res/layout/new_tab_page_layout.xml
++++ b/chrome/android/java/res/layout/new_tab_page_layout.xml
+@@ -261,3 +261,60 @@
+     </LinearLayout>
+
++    <!-- Open Aster's on-device chat with the current Chromium tabs attached. -->
++    <LinearLayout
++        android:id="@+id/aster_ai_shortcut"
++        android:layout_width="match_parent"
++        android:layout_height="wrap_content"
++        android:layout_marginStart="28dp"
++        android:layout_marginTop="10dp"
++        android:layout_marginEnd="28dp"
++        android:background="@drawable/aster_ntp_extension_card"
++        android:clickable="true"
++        android:focusable="true"
++        android:foreground="?attr/selectableItemBackground"
++        android:gravity="center_vertical"
++        android:minHeight="72dp"
++        android:orientation="horizontal"
++        android:paddingStart="16dp"
++        android:paddingTop="12dp"
++        android:paddingEnd="18dp"
++        android:paddingBottom="12dp">
++        <ImageView
++            android:layout_width="38dp"
++            android:layout_height="38dp"
++            android:contentDescription="@null"
++            android:background="@drawable/aster_ntp_extension_icon_background"
++            android:padding="5dp"
++            android:src="@drawable/aster_ntp_logo" />
++        <LinearLayout
++            android:layout_width="0dp"
++            android:layout_height="wrap_content"
++            android:layout_marginStart="14dp"
++            android:layout_weight="1"
++            android:orientation="vertical">
++            <TextView
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:text="Aster AI · private browser chat"
++                android:textColor="@color/aster_brand_primary_text"
++                android:textSize="14sp"
++                android:textStyle="bold" />
++            <TextView
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_marginTop="3dp"
++                android:text="Open pages beside your local assistant"
++                android:textColor="@color/aster_brand_secondary_text"
++                android:textSize="12sp" />
++        </LinearLayout>
++        <TextView
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_marginStart="8dp"
++            android:text="›"
++            android:textColor="@color/aster_brand_accent"
++            android:textSize="26sp"
++            android:textStyle="bold" />
++    </LinearLayout>
++
+      <!-- Composeplate / "AI Mode" -->
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+@@ -434,3 +434,46 @@
+             geckoShortcut.animate().alpha(1f).translationY(0f).setStartDelay(150).setDuration(340).start();
+         }
++        if ("app.aster.chromium".equals(mActivity.getPackageName())) {
++            View aiShortcut = mNewTabPageLayout.findViewById(R.id.aster_ai_shortcut);
++            aiShortcut.setOnClickListener(
++                    view -> {
++                        android.content.Intent intent = mActivity.getPackageManager()
++                                .getLaunchIntentForPackage("app.aster.browser");
++                        if (intent == null) {
++                            android.widget.Toast.makeText(
++                                            mActivity,
++                                            "Install Aster GeckoView to open the local AI assistant",
++                                            android.widget.Toast.LENGTH_LONG)
++                                    .show();
++                            return;
++                        }
++                        org.chromium.chrome.browser.app.ChromeActivity activity =
++                                (org.chromium.chrome.browser.app.ChromeActivity) mActivity;
++                        org.chromium.chrome.browser.tabmodel.TabModel model =
++                                activity.getTabModelSelector().getModel(false);
++                        java.util.ArrayList<String> urls = new java.util.ArrayList<>();
++                        java.util.ArrayList<String> titles = new java.util.ArrayList<>();
++                        int active = 0;
++                        for (int i = 0; i < model.getCount(); i++) {
++                            org.chromium.chrome.browser.tab.Tab tab = model.getTabAt(i);
++                            if (tab == null || tab.getUrl() == null) continue;
++                            String url = tab.getUrl().getSpec();
++                            if (!url.startsWith("https://") && !url.startsWith("http://")) continue;
++                            if (i == model.index()) active = urls.size();
++                            urls.add(url);
++                            titles.add(tab.getTitle() == null ? url : tab.getTitle().toString());
++                        }
++                        intent.putStringArrayListExtra("aster_tabs", urls);
++                        intent.putStringArrayListExtra("aster_tab_titles", titles);
++                        intent.putExtra("aster_active_tab", active);
++                        intent.putExtra("aster_action", "ai");
++                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
++                                | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
++                                | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
++                        mActivity.startActivity(intent);
++                    });
++            aiShortcut.setAlpha(0f);
++            aiShortcut.setTranslationY(10f * mActivity.getResources().getDisplayMetrics().density);
++            aiShortcut.animate().alpha(1f).translationY(0f).setStartDelay(220).setDuration(340).start();
++        }
+         setSearchProviderInfo(searchProviderHasLogo, searchProviderIsGoogle);

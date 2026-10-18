@@ -1,0 +1,9 @@
+{
+  "manifest_version": 2,
+  "name": "Aster Local Page Analysis",
+  "version": "1.0.1",
+  "description": "Reads page text only when the user requests local AI analysis.",
+  "permissions": ["geckoViewAddons", "nativeMessaging", "tabs", "http://*/*", "https://*/*"],
+  "background": { "scripts": ["background.js"] },
+  "browser_specific_settings": { "gecko": { "id": "aster-ai@example.com" } }
+}

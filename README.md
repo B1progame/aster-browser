@@ -13,10 +13,20 @@ Aster is an Android browser project with two engine builds:
 
 - Touch-oriented browser shell with address/search, navigation, home, tabs, bookmarks, recent history, and theme/search-engine settings.
 - Saved open-tab URLs and selected tab, restored when the app restarts.
-- Midnight, Ocean, and Light app themes.
+- Fifteen saved app themes: Midnight, Ocean, Light, Aurora, Forest, Ember, Rose, Cobalt, Sakura, Sand, Glacier, Solar, Violet, Mint, and Graphite.
+- Settings → Browser engine opens the separately installed Chromium build for Chrome extensions and hands over normal HTTP(S) tab URLs and the selected tab. The Chromium source patch imports those tabs on cold and warm launches and skips duplicate URLs. Switching back transfers Chromium's URLs, page titles, and selected tab to GeckoView. This is a tab handoff, not a shared browser profile: cookies, signed-in sessions, history, bookmarks, site permissions, and extensions remain engine-specific.
 - GeckoView tracking protection, fingerprinting and cryptomining protection, and Global Privacy Control.
+- A private-tab mode backed by GeckoView's private session setting. Private tabs are omitted from saved tabs, browsing history, and the local privacy activity counter.
+- A local seven-day protection dashboard based on GeckoView's blocked-resource events, plus custom AI URL templates and a GitHub feature-request draft flow.
+- Aster's on-device AI harness uses LiteRT-LM for local multi-turn chat, model import or optional Wi-Fi download, a real inference self-test, and opt-in site connection analysis. See [`docs/ON_DEVICE_AI.md`](docs/ON_DEVICE_AI.md) for model setup, storage, memory, and privacy details.
+- The local AI harness can list/search open Gecko tabs, open a validated HTTP(S) URL in a new tab, and search the configured engine. Local inference stays on-device; web search sends the search query to the selected search provider. It cannot read page bodies or invoke destructive actions.
+- Website shredder clears GeckoView's host-scoped site data and site settings, closes matching regular tabs, and removes matching Aster history and bookmark entries after confirmation. Optional auto-shred clears site data when navigating away from a host or closing its tab. This does not erase data held by websites, Chromium's separate profile, or external password managers.
+- Startup warm-up for GeckoView and per-session media suspension disabled to reduce avoidable first-page and background-media delays.
+- Tor setup guidance for Orbot's per-app VPN. Aster does not include a Tor client or claim that private tabs route over Tor automatically.
 - PC sharing is visible as “In development” and sends no data.
 - ARM64 Android and x86_64 emulator debug APKs are in `dist/`.
+- Issue #1 candidate release APKs are `dist/AsterBrowser-Gecko-arm64-issue1-candidate.apk` and `dist/AsterBrowser-Gecko-x86_64-issue1-candidate.apk`. Both use the existing development signing certificate so the x86 build could update the installed emulator app in place; they are not Play Store releases.
+- Engine switching was exercised in both directions on the Pixel 10a x86_64 Android Studio emulator: Gecko settings launched Chromium, then the Chromium Settings → Browser engine row launched Gecko. The Chromium row is near the bottom of Settings, below Aster updates. The privacy dashboard and private-tab labeling were also checked; after app restart, private tabs were discarded while normal tabs persisted.
 
 ## Experimental Chromium extension build
 
@@ -34,7 +44,13 @@ Aster is an Android browser project with two engine builds:
 
 ## Important limits
 
-The Chromium build is not a universal converter for desktop extensions. Chromium documents desktop-Android extension support as experimental and still in development; extensions requiring native messaging, unsupported APIs, or desktop-only workflows may not work. The Aster x86_64 emulator build has been tested with a localized MV3 fixture, declarativeNetRequest blocking, live `tabs`/`scripting` API calls, a Web Store-installed MV3 blocker, and Dark Reader 4.9.133. These selected tests do not prove compatibility with every extension. The UI work covers the new-tab page, responsive and mint-themed extension manager, phone extension action sheet, extension shortcut, mint palette, and Chromium's native tab grid; most menus and settings retain Chromium's native UI. The ARM64 APK was built but not runtime-tested on native ARM64 hardware. Blocking is provided by an extension, not Brave's native shield engine. GeckoView profile data cannot be migrated into Chromium's separate profile format. Quest controller behavior has not been tested on a headset; neither build uses camera or body tracking.
+The Chromium build is not a universal converter for desktop extensions. Chromium documents desktop-Android extension support as experimental and still in development; extensions requiring native messaging, unsupported APIs, or desktop-only workflows may not work. The Aster x86_64 emulator build has been tested with a localized MV3 fixture, declarativeNetRequest blocking, live `tabs`/`scripting` API calls, a Web Store-installed MV3 blocker, and Dark Reader 4.9.133. These selected tests do not prove compatibility with every extension. The UI work covers the new-tab page, responsive and mint-themed extension manager, phone extension action sheet, extension shortcut, mint palette, and Chromium's native tab grid; most menus and settings retain Chromium's native UI. Blocking is provided by an extension, not Brave's native shield engine. GeckoView profile data cannot be migrated into Chromium's separate profile format. Neither build uses camera or body tracking.
+
+### Meta Quest 3S check
+
+- The current Chromium ARM64 APK declares `arm64-v8a`, Android minimum SDK 29, target SDK 36, application label `Aster`, and package `app.aster.chromium`. Its VR-mode, high-performance VR, head-tracking, and touchscreen feature declarations are optional. Activities are resizable. This is compatible on paper with Quest 3S's Android-based Horizon OS and its ARM64 hardware.
+- Meta documents existing Android apps running as floating 2D panels and mapping tap, swipe, and scroll gestures to controllers or hand input. Aster does not implement a custom immersive interface or Quest-specific controller layer. A Quest 3S sideload test has not been performed; browser rendering, text entry, Web Store installation, extensions, audio/video, and update installation remain unverified on the headset.
+- The APK does not declare Meta's Quest supported-device metadata. That does not prevent a developer-mode sideload, but it means the current APK is not prepared for Horizon Store submission. Quest sideloading requires Developer Mode and Android Debug Bridge access.
 
 Chrome Web Store theme installation is not verified: the Just Black theme page disabled “Add to Chrome” on the Android build, and Chromium's desktop ThemeService target is excluded from Android. The built-in browser Light/Dark/System themes remain available.
 

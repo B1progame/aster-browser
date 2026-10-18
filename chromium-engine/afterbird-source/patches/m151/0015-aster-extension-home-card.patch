@@ -1,7 +1,7 @@
 diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/android/java/res/layout/new_tab_page_layout.xml
 --- a/chrome/android/java/res/layout/new_tab_page_layout.xml
 +++ b/chrome/android/java/res/layout/new_tab_page_layout.xml
-@@ -70,6 +70,39 @@
+@@ -70,8 +70,68 @@
      <ViewStub
          android:id="@+id/search_box_stub"
          android:layout_width="match_parent"
@@ -13,19 +13,19 @@ diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/and
 +        android:layout_width="match_parent"
 +        android:layout_height="wrap_content"
 +        android:layout_marginStart="28dp"
-+        android:layout_marginTop="16dp"
++        android:layout_marginTop="12dp"
 +        android:layout_marginEnd="28dp"
 +        android:background="@drawable/aster_ntp_extension_card"
 +        android:clickable="true"
 +        android:focusable="true"
 +        android:foreground="?attr/selectableItemBackground"
 +        android:gravity="center_vertical"
-+        android:minHeight="82dp"
++        android:minHeight="72dp"
 +        android:orientation="horizontal"
 +        android:paddingStart="16dp"
-+        android:paddingTop="14dp"
++        android:paddingTop="11dp"
 +        android:paddingEnd="18dp"
-+        android:paddingBottom="14dp">
++        android:paddingBottom="11dp">
 +
 +        <ImageView
 +            android:layout_width="42dp"
@@ -73,7 +73,7 @@ diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/and
 diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_java_resources.gni
 --- a/chrome/android/chrome_java_resources.gni
 +++ b/chrome/android/chrome_java_resources.gni
-@@ -256,6 +256,7 @@ chrome_java_resources = [
+@@ -256,5 +256,6 @@ chrome_java_resources = [
    "java/res/drawable/arrow_forward_24px.xml",
    "java/res/drawable/arrow_up.xml",
 +  "java/res/drawable/aster_ntp_extension_card.xml",
@@ -104,7 +104,7 @@ diff --git a/chrome/android/java/res/drawable/aster_ntp_extension_card.xml b/chr
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/res/drawable/aster_ntp_extension_card.xml
-@@ -0,0 +1,9 @@
+@@ -0,0 +1,7 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<shape xmlns:android="http://schemas.android.com/apk/res/android"
 +    android:shape="rectangle">
@@ -115,7 +115,7 @@ new file mode 100644
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
-@@ -369,6 +370,20 @@
+@@ -369,4 +370,23 @@
          mModel.set(NewTabPageLayoutProperties.SEARCH_BOX_VIEW, mNtpSearchBox.getView());
  
 +        if ("app.aster.chromium".equals(mActivity.getPackageName())) {

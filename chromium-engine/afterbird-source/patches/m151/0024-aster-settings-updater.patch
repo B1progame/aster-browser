@@ -1,0 +1,102 @@
+diff --git a/chrome/android/java/res/xml/main_preferences.xml b/chrome/android/java/res/xml/main_preferences.xml
+index 33897a181a..8520be3c02 100644
+--- a/chrome/android/java/res/xml/main_preferences.xml
++++ b/chrome/android/java/res/xml/main_preferences.xml
+@@ -141,5 +141,10 @@ found in the LICENSE file.
+         android:key="about_chrome"
+         android:order="31"
+         android:title="@string/prefs_about_chrome"/>
++    <Preference
++        android:key="aster_updates"
++        android:order="32"
++        android:title="Aster updates"
++        android:summary="Check for and install the latest browser APK"/>
+
+ </PreferenceScreen>
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
+index a299eca8e6..26e92d764d 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
+@@ -7,6 +7,7 @@ package org.chromium.chrome.browser.settings;
+ import static org.chromium.build.NullUtil.assumeNonNull;
+
+ import android.app.Activity;
++import android.app.AlertDialog;
+ import android.content.Context;
+ import android.content.Intent;
+ import android.content.SharedPreferences;
+@@ -20,6 +21,8 @@ import android.text.style.ForegroundColorSpan;
+ import android.text.style.RelativeSizeSpan;
+ import android.text.style.SuperscriptSpan;
+ import android.view.View;
++import android.widget.LinearLayout;
++import android.widget.TextView;
+
+ import androidx.annotation.VisibleForTesting;
+ import androidx.lifecycle.Lifecycle;
+@@ -50,6 +53,7 @@ import org.chromium.chrome.browser.feature_engagement.TrackerFactory;
+ import org.chromium.chrome.browser.flags.ChromeFeatureList;
+ import org.chromium.chrome.browser.glic.GlicEnabling;
+ import org.chromium.chrome.browser.homepage.HomepageManager;
++import org.chromium.chrome.browser.ntp.AsterUpdateManager;
+ import org.chromium.chrome.browser.password_manager.ManagePasswordsReferrer;
+ import org.chromium.chrome.browser.password_manager.PasswordExportLauncher;
+ import org.chromium.chrome.browser.password_manager.PasswordManagerHelper;
+@@ -350,6 +354,13 @@ public class MainSettings extends ChromeBaseSettingsFragment
+         mManagedPreferenceDelegate = createManagedPreferenceDelegate();
+
+         SettingsUtils.addPreferencesFromResource(this, R.xml.main_preferences);
++        findPreference("aster_updates")
++                .setOnPreferenceClickListener(
++                        preference -> {
++                            onPreferenceSelected(preference);
++                            showAsterUpdateDialog();
++                            return true;
++                        });
+
+         IdentityManager identityManager =
+                 IdentityServicesProvider.get().getIdentityManager(getProfile());
+@@ -449,6 +460,43 @@ public class MainSettings extends ChromeBaseSettingsFragment
+         }
+     }
+
++    private void showAsterUpdateDialog() {
++        Activity activity = getActivity();
++        if (activity == null) return;
++
++        LinearLayout content = new LinearLayout(getContext());
++        content.setOrientation(LinearLayout.VERTICAL);
++        int padding = Math.round(20 * getResources().getDisplayMetrics().density);
++        content.setPadding(padding, padding / 2, padding, padding);
++
++        TextView status = new TextView(getContext());
++        status.setText(
++                "Check the latest Aster release. If an update is available, Android will ask you"
++                        + " to confirm installing it.");
++        status.setTextSize(14);
++        content.addView(
++                status,
++                new LinearLayout.LayoutParams(
++                        LinearLayout.LayoutParams.MATCH_PARENT,
++                        LinearLayout.LayoutParams.WRAP_CONTENT));
++
++        AlertDialog dialog =
++                new AlertDialog.Builder(getContext())
++                        .setTitle("Aster updates")
++                        .setView(content)
++                        .setPositiveButton("Check for updates", null)
++                        .setNegativeButton("Close", null)
++                        .create();
++        dialog.setOnShowListener(
++                ignored ->
++                        dialog.getButton(AlertDialog.BUTTON_POSITIVE)
++                                .setOnClickListener(
++                                        view ->
++                                                AsterUpdateManager.checkAndDownload(
++                                                        activity, status)));
++        dialog.show();
++    }
++
+     private static boolean shouldShowSafetyHubPref() {
+         return !DeviceInfo.isAutomotive();
+     }

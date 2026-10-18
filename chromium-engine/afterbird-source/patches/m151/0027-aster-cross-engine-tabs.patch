@@ -1,0 +1,52 @@
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
+@@ -1628,3 +1628,4 @@ public class ChromeTabbedActivity extends ChromeActivity
+         TraceEvent.begin("ChromeTabbedActivity.onNewIntentWithNative");
+         super.onNewIntentWithNative(intent);
++        handleAsterTabHandoff(intent);
+         if (!IntentHandler.shouldIgnoreIntent(intent, this, /* isCustomTab= */ false)) {
+@@ -1649,1 +1650,41 @@ public class ChromeTabbedActivity extends ChromeActivity
+     private void maybeHandleOpenTabGroupIntent(Intent intent) {
++    /** Imports the portable normal-tab portion of a session from Aster GeckoView. */
++    private void handleAsterTabHandoff(Intent intent) {
++        java.util.ArrayList<String> urls = intent.getStringArrayListExtra("aster_tabs");
++        if (urls == null || urls.isEmpty()) return;
++        int activeIndex = intent.getIntExtra("aster_active_tab", 0);
++        org.chromium.chrome.browser.tabmodel.TabModelSelector selector = getTabModelSelector();
++        selector.selectModel(/* incognito= */ false);
++        org.chromium.chrome.browser.tabmodel.TabModel model = selector.getModel(false);
++        java.util.ArrayList<String> existingUrls = new java.util.ArrayList<>();
++        for (int i = 0; i < model.getCount(); i++) {
++            org.chromium.chrome.browser.tab.Tab tab = model.getTabAt(i);
++            if (tab != null && tab.getUrl() != null) existingUrls.add(tab.getUrl().getSpec());
++        }
++        for (String url : urls) {
++            android.net.Uri parsed = android.net.Uri.parse(url);
++            if (( !"https".equals(parsed.getScheme()) && !"http".equals(parsed.getScheme()))
++                    || parsed.getHost() == null || existingUrls.contains(url)) continue;
++            selector.openNewTab(
++                    new org.chromium.content_public.browser.LoadUrlParams(url),
++                    org.chromium.chrome.browser.tab.TabLaunchType.FROM_EXTERNAL_APP,
++                    null,
++                    false);
++            existingUrls.add(url);
++        }
++        if (activeIndex >= 0 && activeIndex < urls.size()) {
++            String selectedUrl = urls.get(activeIndex);
++            for (int i = 0; i < model.getCount(); i++) {
++                org.chromium.chrome.browser.tab.Tab tab = model.getTabAt(i);
++                if (tab != null && tab.getUrl() != null
++                        && selectedUrl.equals(tab.getUrl().getSpec())) {
++                    model.setIndex(i, org.chromium.chrome.browser.tab.TabSelectionType.FROM_USER);
++                    break;
++                }
++            }
++        }
++        intent.removeExtra("aster_tabs");
++        intent.removeExtra("aster_tab_titles");
++        intent.removeExtra("aster_active_tab");
++    }
++
+@@ -2189,1 +2229,2 @@ public class ChromeTabbedActivity extends ChromeActivity
+         mTabModelOrchestrator.restoreTabs(activeTabBeingRestored);
++        handleAsterTabHandoff(intent);

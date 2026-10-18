@@ -1,0 +1,4 @@
+14eb6e994d027fcf408e34bd345116057600a3e988c42560b6fe6d1891f2612d  AsterBrowser-v2.1.0-Android-arm64.apk
+3989c1a23a8deca47a633ef100708c2b0d6b326b4ec8b0cbea6a1488bea24231  AsterBrowser-v2.1.0-Android-x86_64.apk
+337e68842989e0554febe4a625959e70adccaddafc9e5cc983b2b77bc95b7f7f  AsterBrowser-v2.1.0-Gecko-Android-arm64.apk
+5628f53b1313b6d335847684336c2a9b716a1a6378614f0676bf83d73d49f6b7  AsterBrowser-v2.1.0-Gecko-Android-x86_64.apk

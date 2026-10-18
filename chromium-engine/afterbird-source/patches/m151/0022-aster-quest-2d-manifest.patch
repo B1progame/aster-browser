@@ -1,0 +1,32 @@
+diff --git a/chrome/android/java/AndroidManifest.xml b/chrome/android/java/AndroidManifest.xml
+--- a/chrome/android/java/AndroidManifest.xml
++++ b/chrome/android/java/AndroidManifest.xml
+@@ -134,11 +134,8 @@
+     -->
+     <uses-feature android:name="android.hardware.screen.landscape" android:required="false"/>
+-    <!-- Indicates that head tracking should be done in 6DoF, if available -->
+-    <uses-feature android:name="android.hardware.vr.headtracking" android:version="1" android:required="false"/>
+     <!-- Feature declarations required to support conditional install for VR DFM -->
+     <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="false"/>
+     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false"/>
+
+-    <uses-permission-sdk-23 android:name="android.permission.SCENE_UNDERSTANDING_FINE" />
+-    <uses-permission-sdk-23 android:name="android.permission.HAND_TRACKING" />
++    <!-- Flat browser panel: Quest maps controller/hand interaction to UI events; no tracking permission. -->
+     {% endif %}
+@@ -232,3 +229,6 @@
+         {% block extra_application_attributes %}{% endblock %}>
+
++        <meta-data
++            android:name="com.oculus.supportedDevices"
++            android:value="quest2|questpro|quest3|quest3s" />
+         {% if channel in ['canary', 'dev', 'default'] %}
+@@ -613,7 +613,8 @@
+             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|mcc|mnc|screenLayout|smallestScreenSize|uiMode|navigation|density|touchscreen|colorMode"
+             android:hardwareAccelerated="false"
+             {% endblock %}
+         >
++            <layout android:defaultWidth="1024dp" android:defaultHeight="640dp" />
+             <meta-data
+                 android:name="android.activity.launch_mode"
+                 android:value="singleInstancePerTask"/>

@@ -1,0 +1,317 @@
+From 5a3708270afd2ed1f2de8c5b39f5d9130000021 Mon Sep 17 00:00:00 2001
+From: Aster Browser <aster@users.noreply.github.com>
+Date: Fri, 16 Oct 2026 19:00:00 +0200
+Subject: [PATCH] Add a one-tap Aster release update check
+
+Add an update action to Aster's Android new-tab page. It checks the public
+GitHub latest-release API, selects the APK for the device ABI, compares the
+release with the Aster version embedded in this build, and queues the APK in
+Android DownloadManager. Installation remains subject to Android's normal
+unknown-source and package-installer confirmations.
+---
+ chrome/android/chrome_java_sources.gni              |   1 +
+ chrome/android/java/res/layout/new_tab_page_layout.xml |  65 +++++++++
+ .../browser/ntp/AsterUpdateManager.java              | 172 ++++++++++++++++++++++++
+ .../browser/ntp/NewTabPageCoordinator.java           |   6 +
+
+ 4 files changed, 244 insertions(+)
+
+diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java_sources.gni
+index 111111111111..222222222222 100644
+--- a/chrome/android/chrome_java_sources.gni
++++ b/chrome/android/chrome_java_sources.gni
+@@ -867,6 +867,7 @@ chrome_java_sources = [
+   "java/src/org/chromium/chrome/browser/ntp/NativePageRootFrameLayout.java",
+   "java/src/org/chromium/chrome/browser/ntp/NewTabPage.java",
+   "java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java",
++  "java/src/org/chromium/chrome/browser/ntp/AsterUpdateManager.java",
+   "java/src/org/chromium/chrome/browser/ntp/NewTabPageCreationState.java",
+   "java/src/org/chromium/chrome/browser/ntp/NewTabPageCreationTracker.java",
+   "java/src/org/chromium/chrome/browser/ntp/NewTabPageLayout.java",
+diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/android/java/res/layout/new_tab_page_layout.xml
+index 111111111111..222222222222 100644
+--- a/chrome/android/java/res/layout/new_tab_page_layout.xml
++++ b/chrome/android/java/res/layout/new_tab_page_layout.xml
+@@ -144,3 +144,68 @@
++    <!-- Aster update action; the OS installer still confirms every installation. -->
++    <LinearLayout
++        android:id="@+id/aster_update_shortcut"
++        android:layout_width="match_parent"
++        android:layout_height="wrap_content"
++        android:layout_marginStart="28dp"
++        android:layout_marginTop="10dp"
++        android:layout_marginEnd="28dp"
++        android:background="@drawable/aster_ntp_extension_card"
++        android:clickable="true"
++        android:focusable="true"
++        android:foreground="?attr/selectableItemBackground"
++        android:gravity="center_vertical"
++        android:minHeight="64dp"
++        android:orientation="horizontal"
++        android:paddingStart="16dp"
++        android:paddingTop="10dp"
++        android:paddingEnd="18dp"
++        android:paddingBottom="10dp">
++
++        <TextView
++            android:layout_width="42dp"
++            android:layout_height="42dp"
++            android:background="@drawable/aster_ntp_extension_icon_background"
++            android:gravity="center"
++            android:text="↻"
++            android:textColor="@color/aster_brand_accent"
++            android:textSize="26sp"
++            android:textStyle="bold" />
++
++        <LinearLayout
++            android:layout_width="0dp"
++            android:layout_height="wrap_content"
++            android:layout_marginStart="14dp"
++            android:layout_weight="1"
++            android:orientation="vertical">
++
++            <TextView
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:text="Aster updates"
++                android:textColor="@color/aster_brand_primary_text"
++                android:textSize="14sp"
++                android:textStyle="bold" />
++
++            <TextView
++                android:id="@+id/aster_update_status"
++                android:layout_width="match_parent"
++                android:layout_height="wrap_content"
++                android:layout_marginTop="3dp"
++                android:text="Tap to check for the latest browser build"
++                android:textColor="@color/aster_brand_secondary_text"
++                android:textSize="12sp" />
++        </LinearLayout>
++
++        <TextView
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_marginStart="8dp"
++            android:text="CHECK"
++            android:textColor="@color/aster_brand_accent"
++            android:textSize="11sp"
++            android:textStyle="bold" />
++    </LinearLayout>
++
+     <!-- Composeplate / "AI Mode" -->
+     <ViewStub
+         android:id="@+id/composeplate_view_stub"
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/AsterUpdateManager.java b/chrome/android/java/src/org/chromium/chrome/browser/ntp/AsterUpdateManager.java
+new file mode 100644
+index 0000000000..594dd12642
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/AsterUpdateManager.java
+@@ -0,0 +1,192 @@
++// Copyright 2026 The Aster Browser Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++package org.chromium.chrome.browser.ntp;
++
++import android.app.Activity;
++import android.app.DownloadManager;
++import android.net.Uri;
++import android.os.Build;
++import android.os.Environment;
++import android.widget.TextView;
++import android.widget.Toast;
++
++import org.chromium.base.Log;
++import org.chromium.chrome.R;
++import org.chromium.net.ChromiumNetworkAdapter;
++import org.chromium.net.NetworkTrafficAnnotationTag;
++import org.json.JSONArray;
++import org.json.JSONObject;
++
++import java.io.BufferedReader;
++import java.io.InputStreamReader;
++import java.net.HttpURLConnection;
++import java.net.URL;
++import java.nio.charset.StandardCharsets;
++
++/** Checks Aster's public GitHub release and hands a matching APK to Android Downloads. */
++public final class AsterUpdateManager {
++    private static final String TAG = "AsterUpdater";
++    private static final String RELEASE_API =
++            "https://api.github.com/repos/B1progame/aster-browser/releases/latest";
++    private static final String RELEASE_DOWNLOAD_PREFIX =
++            "https://github.com/B1progame/aster-browser/releases/download/";
++
++    private static final NetworkTrafficAnnotationTag TRAFFIC_ANNOTATION =
++            NetworkTrafficAnnotationTag.createComplete(
++                    "aster_browser_update_check",
++                    """
++                    semantics {
++                      sender: "Aster Browser"
++                      description: "Checks the public Aster GitHub release when the user taps the update card."
++                      trigger: "The user taps Check for updates."
++                      data: "Installed Aster version only."
++                      destination: OTHER
++                    }
++                    policy {
++                      cookies_allowed: NO
++                      setting: "User initiated."
++                    }""");
++
++    private AsterUpdateManager() {}
++
++    public static void checkAndDownload(Activity activity, TextView status) {
++        String installedVersion = activity.getString(R.string.aster_release_version);
++        status.setText("Checking the latest Aster release…");
++        Thread worker =
++                new Thread(
++                        () -> {
++                            try {
++                                Release release = fetchLatestRelease(installedVersion);
++                                if (!isNewerVersion(release.tag, installedVersion)) {
++                                    postStatus(activity, status,
++                                            "Aster " + installedVersion + " is up to date");
++                                    return;
++                                }
++                                enqueueDownload(activity, status, release);
++                            } catch (Exception exception) {
++                                postStatus(activity, status,
++                                        "Update check failed — tap to try again");
++                                Log.w(TAG, "Could not check or download Aster update", exception);
++                            }
++                        },
++                        "AsterUpdateCheck");
++        worker.setDaemon(true);
++        worker.start();
++    }
++
++    private static Release fetchLatestRelease(String installedVersion) throws Exception {
++        HttpURLConnection connection =
++                (HttpURLConnection)
++                        ChromiumNetworkAdapter.openConnection(new URL(RELEASE_API), TRAFFIC_ANNOTATION);
++        connection.setRequestMethod("GET");
++        connection.setConnectTimeout(10000);
++        connection.setReadTimeout(15000);
++        connection.setRequestProperty("Accept", "application/vnd.github+json");
++        connection.setRequestProperty("User-Agent", "Aster-Browser-Android/" + installedVersion);
++        try {
++            if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
++                throw new IllegalStateException("GitHub release API returned HTTP "
++                        + connection.getResponseCode());
++            }
++            StringBuilder json = new StringBuilder();
++            try (BufferedReader reader = new BufferedReader(
++                    new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
++                String line;
++                while ((line = reader.readLine()) != null) {
++                    json.append(line);
++                    if (json.length() > 2_000_000) {
++                        throw new IllegalStateException("Release response is too large");
++                    }
++                }
++            }
++            JSONObject release = new JSONObject(json.toString());
++            if (release.optBoolean("draft", true) || release.optBoolean("prerelease", true)) {
++                throw new IllegalStateException("The latest release is not stable");
++            }
++            String tag = release.getString("tag_name");
++            if (!tag.matches("v[0-9]+\\.[0-9]+\\.[0-9]+")) {
++                throw new IllegalStateException("Invalid Aster release tag");
++            }
++            String abi = androidAbiSuffix();
++            String expectedName = "AsterBrowser-" + tag + "-Android-" + abi + ".apk";
++            JSONArray assets = release.getJSONArray("assets");
++            for (int index = 0; index < assets.length(); index++) {
++                JSONObject asset = assets.getJSONObject(index);
++                if (!expectedName.equals(asset.optString("name"))) continue;
++                String url = asset.getString("browser_download_url");
++                if (!url.startsWith(RELEASE_DOWNLOAD_PREFIX + tag + "/" + expectedName)) {
++                    throw new IllegalStateException("APK is not hosted in Aster's release path");
++                }
++                Uri uri = Uri.parse(url);
++                if (!"https".equals(uri.getScheme()) || !"github.com".equals(uri.getHost())) {
++                    throw new IllegalStateException("APK download URL is not trusted");
++                }
++                return new Release(tag, expectedName, url);
++            }
++            throw new IllegalStateException("No " + abi + " APK is attached to " + tag);
++        } finally {
++            connection.disconnect();
++        }
++    }
++
++    private static String androidAbiSuffix() {
++        for (String abi : Build.SUPPORTED_ABIS) {
++            if ("arm64-v8a".equals(abi)) return "arm64";
++            if ("x86_64".equals(abi)) return "x86_64";
++        }
++        throw new IllegalStateException("This device's CPU architecture is not supported");
++    }
++
++    static boolean isNewerVersion(String candidate, String installed) {
++        String[] candidateParts = candidate.replaceFirst("^v", "").split("\\.");
++        String[] installedParts = installed.replaceFirst("^v", "").split("\\.");
++        if (candidateParts.length != 3 || installedParts.length != 3) return false;
++        try {
++            for (int index = 0; index < 3; index++) {
++                long remote = Long.parseLong(candidateParts[index]);
++                long local = Long.parseLong(installedParts[index]);
++                if (remote != local) return remote > local;
++            }
++        } catch (NumberFormatException exception) {
++            return false;
++        }
++        return false;
++    }
++
++    private static void enqueueDownload(Activity activity, TextView status, Release release) {
++        DownloadManager manager = activity.getSystemService(DownloadManager.class);
++        if (manager == null) throw new IllegalStateException("Android Downloads is unavailable");
++        DownloadManager.Request request = new DownloadManager.Request(Uri.parse(release.url));
++        request.setTitle("Aster Browser " + release.tag);
++        request.setDescription("Open the download notification to review and install this update");
++        request.setMimeType("application/vnd.android.package-archive");
++        request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, release.name);
++        request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
++        long id = manager.enqueue(request);
++        postStatus(activity, status,
++                "Downloading " + release.tag + " — open the Android notification to install");
++        activity.runOnUiThread(() -> Toast.makeText(activity,
++                "Aster update download started", Toast.LENGTH_LONG).show());
++        Log.i(TAG, "Queued Aster update download id=" + id + " tag=" + release.tag);
++    }
++
++    private static void postStatus(Activity activity, TextView status, String message) {
++        activity.runOnUiThread(() -> {
++            if (!activity.isFinishing() && !activity.isDestroyed()) status.setText(message);
++        });
++    }
++
++    private static final class Release {
++        final String tag;
++        final String name;
++        final String url;
++
++        Release(String tag, String name, String url) {
++            this.tag = tag;
++            this.name = name;
++            this.url = url;
++        }
++    }
++}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+index 111111111111..222222222222 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+@@ -386,3 +386,9 @@
+                     .setDuration(340)
+                     .start();
++            View updateShortcut = mNewTabPageLayout.findViewById(R.id.aster_update_shortcut);
++            android.widget.TextView updateStatus = mNewTabPageLayout.findViewById(R.id.aster_update_status);
++            updateShortcut.setOnClickListener(
++                    view -> AsterUpdateManager.checkAndDownload(mActivity, updateStatus));
++            updateShortcut.setAlpha(0f);
++            updateShortcut.animate().alpha(1f).setStartDelay(180).setDuration(360).start();
+         }
+--
+2.46.0

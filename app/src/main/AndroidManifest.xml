@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <queries>
+        <package android:name="app.aster.chromium" />
+        <package android:name="org.torproject.android" />
+    </queries>
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <application
@@ -8,8 +12,16 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="false"
         android:allowBackup="true"
-        android:fullBackupContent="true">
-        <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|screenSize|keyboardHidden">
+        android:fullBackupContent="true"
+        android:resizeableActivity="true">
+        <meta-data
+            android:name="com.oculus.supportedDevices"
+            android:value="quest2|questpro|quest3|quest3s" />
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="density|keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|uiMode">
+            <layout android:defaultWidth="1024dp" android:defaultHeight="640dp" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

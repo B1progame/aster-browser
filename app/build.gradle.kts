@@ -8,6 +8,7 @@ plugins {
 android {
     namespace = "app.aster.browser"
     compileSdkVersion("android-37.2")
+    buildFeatures { buildConfig = true }
 
     splits {
         abi {
@@ -20,10 +21,15 @@ android {
 
     defaultConfig {
         applicationId = "app.aster.browser"
-        minSdk = 26
-        targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        minSdk = 29
+        targetSdk = 34
+        versionCode = 2
+        versionName = "2.1.0"
+    }
+    buildTypes {
+        getByName("debug") { applicationIdSuffix = ".debug" }
+        // Keep sideloaded Gecko updates installable over the existing development-signed build.
+        getByName("release") { signingConfig = signingConfigs.getByName("debug") }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -39,6 +45,7 @@ kotlin {
 
 dependencies {
     implementation("org.mozilla.geckoview:geckoview:158.0.20261007201254")
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")
     implementation("androidx.core:core-ktx:1.16.0")
     configurations.configureEach {
         resolutionStrategy.force("androidx.core:core:1.16.0", "androidx.core:core-ktx:1.16.0")
