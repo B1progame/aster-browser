@@ -27,5 +27,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".TorPrivateActivity"
+            android:process=":torprivate"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:configChanges="density|keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|uiMode"
+            android:label="Aster Tor Private Window" />
     </application>
 </manifest>

@@ -28,6 +28,10 @@
     :root[data-theme="violet"] { --page:#171523; --panel:#211e33; --raised:#302b49; --ink:#f5f1ff; --muted:#b9b0d0; --soft:#877ea0; --accent:#c1a4ff; --border:#39334b; --glow:#33254d; --glow-alt:#202b40; }
     :root[data-theme="mint"] { --page:#111c1a; --panel:#192824; --raised:#263a33; --ink:#effaf4; --muted:#a8c1b5; --soft:#75877a; --accent:#70e0b4; --border:#33453a; --glow:#203d30; --glow-alt:#1e2931; }
     :root[data-theme="graphite"] { --page:#141619; --panel:#202428; --raised:#2c3237; --ink:#f4f6f7; --muted:#aab2b8; --soft:#77838a; --accent:#dce3e5; --border:#30373b; --glow:#30373b; --glow-alt:#20232f; }
+    :root[data-theme="plum"] { --page:#1b151d; --panel:#29202d; --raised:#3a2c40; --ink:#f8f0fa; --muted:#c3afc9; --soft:#927b98; --accent:#dfa4ed; --border:#443449; --glow:#42264b; --glow-alt:#29243b; }
+    :root[data-theme="coral"] { --page:#201714; --panel:#2d211d; --raised:#40302a; --ink:#fff3ed; --muted:#c6aaa0; --soft:#96796f; --accent:#ff987d; --border:#4a3932; --glow:#4a2a20; --glow-alt:#30232e; }
+    :root[data-theme="lagoon"] { --page:#102022; --panel:#192c2e; --raised:#254043; --ink:#eef9f8; --muted:#a6c3c3; --soft:#738f90; --accent:#6dd6c4; --border:#315052; --glow:#1a4343; --glow-alt:#202d3d; }
+    :root[data-theme="arctic"] { color-scheme:light; --page:#edf3f8; --panel:#fff; --raised:#dce6f0; --ink:#172533; --muted:#607487; --soft:#7d91a3; --accent:#3b78b5; --border:#cbd9e6; --glow:#d5e7f3; --glow-alt:#e7e3f2; }
     * { box-sizing:border-box; }
     html { min-height:100%; background:var(--page); }
     body {
@@ -80,7 +84,7 @@
 <body>
   <script>
     const selectedTheme = new URLSearchParams(location.search).get('theme');
-    if (['ocean','light','aurora','forest','ember','rose','cobalt','sakura','sand','glacier','solar','violet','mint','graphite'].includes(selectedTheme)) document.documentElement.dataset.theme = selectedTheme;
+    if (['ocean','light','aurora','forest','ember','rose','cobalt','sakura','sand','glacier','solar','violet','mint','graphite','plum','coral','lagoon','arctic'].includes(selectedTheme)) document.documentElement.dataset.theme = selectedTheme;
   </script>
   <main>
     <header class="hero">

@@ -23,8 +23,8 @@ android {
         applicationId = "app.aster.browser"
         minSdk = 29
         targetSdk = 34
-        versionCode = 2
-        versionName = "2.1.0"
+        versionCode = 3
+        versionName = "2.2.0"
     }
     buildTypes {
         getByName("debug") { applicationIdSuffix = ".debug" }
@@ -45,6 +45,8 @@ kotlin {
 
 dependencies {
     implementation("org.mozilla.geckoview:geckoview:158.0.20261007201254")
+    implementation("info.guardianproject:tor-android:0.4.9.13.2")
+    implementation("info.guardianproject:jtorctl:0.4.5.7")
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")
     implementation("androidx.core:core-ktx:1.16.0")
     configurations.configureEach {

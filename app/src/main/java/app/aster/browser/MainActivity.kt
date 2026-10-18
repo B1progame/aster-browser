@@ -21,7 +21,12 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.content.Context
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.ComponentName
+import android.content.ServiceConnection
+import android.content.IntentFilter
 import android.net.Uri
+import android.os.IBinder
 import android.widget.*
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
@@ -44,6 +49,8 @@ import com.google.ai.edge.litertlm.tool
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.content.ContextCompat
+import org.torproject.jni.TorService
 
 private data class BrowserTab(
     val id: Long,
@@ -63,7 +70,46 @@ private const val MAX_EXTENSION_BYTES = 50L * 1024L * 1024L
 private const val GEMMA_MODEL_URL = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/6e5c4f1e395deb959c494953478fa5cec4b8008f/gemma-4-E2B-it.litertlm?download=true"
 private const val GEMMA_MODEL_NAME = "gemma-4-E2B-it.litertlm"
 private const val GEMMA_MODEL_SHA256 = "181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c"
-private const val MIN_MODEL_DOWNLOAD_BYTES = 3L * 1024L * 1024L * 1024L
+private const val QWEN_MODEL_URL = "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/e6687177e00897731e7716267eebd4eba0dde7c2/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm?download=true"
+private const val QWEN_MODEL_NAME = "Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm"
+private const val QWEN_MODEL_SHA256 = "03e7da1eb1108b50dffaa9bb52cc7bcbad2eb0c66ca990267f480c1e545d2856"
+
+private data class LocalModelSpec(
+    val key: String,
+    val name: String,
+    val fileName: String,
+    val url: String,
+    val sha256: String,
+    val expectedBytes: Long,
+    val minimumRamBytes: Long,
+    val sizeLabel: String,
+    val license: String
+)
+
+private val LOCAL_MODELS = listOf(
+    LocalModelSpec(
+        key = "qwen3-0.6b",
+        name = "Qwen3 0.6B · compact",
+        fileName = QWEN_MODEL_NAME,
+        url = QWEN_MODEL_URL,
+        sha256 = QWEN_MODEL_SHA256,
+        expectedBytes = 344_671_744L,
+        minimumRamBytes = 1_200L * 1024L * 1024L,
+        sizeLabel = "329 MiB",
+        license = "Apache 2.0"
+    ),
+    LocalModelSpec(
+        key = "gemma4-e2b",
+        name = "Gemma 4 E2B · stronger",
+        fileName = GEMMA_MODEL_NAME,
+        url = GEMMA_MODEL_URL,
+        sha256 = GEMMA_MODEL_SHA256,
+        expectedBytes = 0L,
+        minimumRamBytes = 1_850L * 1024L * 1024L,
+        sizeLabel = "2.59 GB",
+        license = "Gemma terms"
+    )
+)
 
 class MainActivity : Activity() {
     private lateinit var runtime: GeckoRuntime
@@ -95,6 +141,37 @@ class MainActivity : Activity() {
     private var localAiTranscript: LinearLayout? = null
     private var localAiInput: EditText? = null
     private var localAiSend: TextView? = null
+    private var browserMenuDialog: AlertDialog? = null
+    private var siteShieldsDialog: AlertDialog? = null
+    private var torService: TorService? = null
+    private var torServiceBound = false
+    private var torWindowReceiverRegistered = false
+    private var pendingTorStartUrl: String? = null
+    private var torStartupDialog: AlertDialog? = null
+    private val torStartupHandler = Handler(Looper.getMainLooper())
+    private val torStartupTimeout = Runnable { failTorWindowStart("Tor did not connect in time. Check your network and try again.") }
+    private val torServiceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            torService = (binder as? TorService.LocalBinder)?.service
+            if (lastTorStatus == TorService.STATUS_ON) launchPendingTorWindow()
+        }
+        override fun onServiceDisconnected(name: ComponentName?) { torService = null }
+    }
+    private val torWindowReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                TorService.ACTION_STATUS -> {
+                    lastTorStatus = intent.getStringExtra(TorService.EXTRA_STATUS)
+                    when (lastTorStatus) {
+                        TorService.STATUS_ON -> launchPendingTorWindow()
+                        TorService.STATUS_OFF -> if (pendingTorStartUrl != null) failTorWindowStart("Tor stopped before it could connect. No Tor window was opened.")
+                    }
+                }
+                TorService.ACTION_ERROR -> failTorWindowStart(intent.getStringExtra(Intent.EXTRA_TEXT) ?: "Tor could not start.")
+                TorPrivateActivity.ACTION_WINDOW_CLOSED -> releaseTorService()
+            }
+        }
+    }
     private var localAiDownloadId = -1L
     private var localAiDownloadButton: TextView? = null
     private var aiActivePageTitle: TextView? = null
@@ -131,7 +208,7 @@ class MainActivity : Activity() {
                     DownloadManager.STATUS_SUCCESSFUL -> {
                         localAiDownloadId = -1L
                         localAiDownloadButton?.text = "Verifying model…"
-                        setLocalAiStatus("Download finished · verifying the 2.59 GB model before use…")
+                        setLocalAiStatus("Download finished · verifying ${localModelSpec().name} before use…")
                         prefs.edit().remove("local_ai_download_id").apply()
                         verifyDownloadedModel()
                     }
@@ -161,7 +238,7 @@ class MainActivity : Activity() {
                         }
                         localAiDownloadButton?.text = "Cancel download"
                         val remaining = if (downloadBytesPerSecond > 0 && total > downloaded) formatDuration((total - downloaded) / downloadBytesPerSecond) else "calculating time left"
-                        setLocalAiStatus("Downloading Gemma 4 E2B · ${downloadProgress(downloaded, total)} · ${formatBytes(downloaded)} of ${formatBytes(total)} · ${formatRate(downloadBytesPerSecond)} · $remaining")
+                        setLocalAiStatus("Downloading ${localModelSpec().name} · ${downloadProgress(downloaded, total)} · ${formatBytes(downloaded)} of ${formatBytes(total)} · ${formatRate(downloadBytesPerSecond)} · $remaining")
                         localAiDownloadPoll.postDelayed(this, 1200L)
                     }
                 }
@@ -256,11 +333,15 @@ class MainActivity : Activity() {
             "Violet" -> { dark=0xff171523.toInt(); panel=0xff211e33.toInt(); raised=0xff302b49.toInt(); ink=0xfff5f1ff.toInt(); muted=0xffb9b0d0.toInt(); accent=0xffc1a4ff.toInt() }
             "Mint" -> { dark=0xff111c1a.toInt(); panel=0xff192824.toInt(); raised=0xff263a33.toInt(); ink=0xffeffaf4.toInt(); muted=0xffa8c1b5.toInt(); accent=0xff70e0b4.toInt() }
             "Graphite" -> { dark=0xff141619.toInt(); panel=0xff202428.toInt(); raised=0xff2c3237.toInt(); ink=0xfff4f6f7.toInt(); muted=0xffaab2b8.toInt(); accent=0xfff4f6f7.toInt() }
+            "Plum" -> { dark=0xff1b151d.toInt(); panel=0xff29202d.toInt(); raised=0xff3a2c40.toInt(); ink=0xfff8f0fa.toInt(); muted=0xffc3afc9.toInt(); accent=0xffdfa4ed.toInt() }
+            "Coral" -> { dark=0xff201714.toInt(); panel=0xff2d211d.toInt(); raised=0xff40302a.toInt(); ink=0xfffff3ed.toInt(); muted=0xffc6aaa0.toInt(); accent=0xffff987d.toInt() }
+            "Lagoon" -> { dark=0xff102022.toInt(); panel=0xff192c2e.toInt(); raised=0xff254043.toInt(); ink=0xffeef9f8.toInt(); muted=0xffa6c3c3.toInt(); accent=0xff6dd6c4.toInt() }
+            "Arctic" -> { dark=0xffedf3f8.toInt(); panel=Color.WHITE; raised=0xffdce6f0.toInt(); ink=0xff172533.toInt(); muted=0xff607487.toInt(); accent=0xff3b78b5.toInt() }
             else -> { dark=0xff17191d.toInt(); panel=0xff22262b.toInt(); raised=0xff2c3137.toInt(); ink=0xfff3f4f5.toInt(); muted=0xffa1a8af.toInt(); accent=0xff65d6b1.toInt() }
         }
         window.statusBarColor = dark
         window.navigationBarColor = dark
-        window.decorView.systemUiVisibility = if (themeName == "Light") View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR else 0
+        window.decorView.systemUiVisibility = if (themeName == "Light" || themeName == "Arctic") View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR else 0
     }
 
     private fun buildShell() {
@@ -377,6 +458,8 @@ class MainActivity : Activity() {
 
     private fun showMenu() {
         val dialog = AlertDialog.Builder(this).create()
+        browserMenuDialog = dialog
+        dialog.setOnDismissListener { if (browserMenuDialog === dialog) browserMenuDialog = null }
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(18))
@@ -395,6 +478,7 @@ class MainActivity : Activity() {
         content.addView(menuRow(R.drawable.ic_bookmarks, "Bookmarks", "Your saved pages") { dialog.dismiss(); showBookmarks() })
         content.addView(menuRow(R.drawable.ic_history, "History", "Recently visited") { dialog.dismiss(); showHistory() })
         content.addView(menuRow(R.drawable.ic_private, "New private tab", "Not added to history or saved tabs") { dialog.dismiss(); createTab(homeUrl, privateMode = true) })
+        content.addView(menuRow(R.drawable.ic_private, "New Tor private window", "Route this separate window through Tor") { dialog.dismiss(); showTorSetup() })
         content.addView(menuRow(R.drawable.ic_chart, "Privacy dashboard", "Protection activity · last 7 days") { dialog.dismiss(); showPrivacyDashboard() })
         content.addView(menuRow(R.drawable.ic_ai, "On-device AI", "Private local chat · no account needed") { dialog.dismiss(); showLocalAi() })
         content.addView(menuRow(R.drawable.ic_shred, "Shred this website", "Clear this site's saved data") { dialog.dismiss(); confirmShredCurrentSite() })
@@ -488,7 +572,7 @@ class MainActivity : Activity() {
         section(content,"PRIVACY")
         row(content,"Privacy dashboard","Protection events · last 7 days","Open") { showPrivacyDashboard() }
         row(content,"Private browsing","Open a private tab","New tab") { showBrowser(); createTab(homeUrl, privateMode = true) }
-        row(content,"Tor routing","Use Orbot’s per-app VPN","Setup") { showTorSetup() }
+        row(content,"Tor private window","Embedded Tor · separate temporary Gecko profile","Open") { showTorSetup() }
         row(content,"Tracking protection","Strict · enabled","Details") { message("Tracking protection","Aster enables GeckoView’s known ad, analytics, social, email, fingerprinting and cryptomining protections, non-tracker cookie policy, tracking-parameter stripping, and safe-browsing lists. This blocks known ad/tracker resources; it cannot remove every first-party ad or guarantee Brave-level cosmetic filtering. Tap SHIELDS ON in the address header to set a persistent exception for the current website.") }
         row(content,"Website shredder","Remove one site's stored data","Shred") { confirmShredCurrentSite() }
         row(content,"Auto-shred on leave",if (prefs.getBoolean("auto_shred_on_leave", false)) "On · clear site storage when leaving" else "Off · keep site storage","Change") { chooseAutoShred() }
@@ -876,24 +960,97 @@ class MainActivity : Activity() {
     }
 
     private fun showTorSetup() {
-        val orbot = packageManager.getLaunchIntentForPackage("org.torproject.android")
         AlertDialog.Builder(this)
-            .setTitle("Tor routing with Orbot")
-            .setMessage("Private tabs use GeckoView’s private mode and are not Tor by themselves. To route Aster through Tor, install and start Orbot, then add Aster Browser to Orbot’s per-app VPN list. Until Orbot is connected and Aster is selected there, your traffic uses the normal network.")
+            .setTitle("Open a Tor private window?")
+            .setMessage("Aster starts its bundled Tor service and opens a separate Gecko profile through Tor's SOCKS proxy. The session is private and its temporary profile is removed when closed. Tor must finish connecting before the window opens.")
             .setNegativeButton("Close", null)
-            .setPositiveButton(if (orbot == null) "Get Orbot" else "Open Orbot") { _, _ ->
-                try {
-                    if (orbot != null) startActivity(orbot)
-                    else startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://orbot.app/en/download")))
-                } catch (_: Exception) {
-                    message("Orbot", "Install Orbot from orbot.app, then select Aster Browser in its per-app VPN settings.")
-                }
-            }
+            .setPositiveButton("Connect to Tor") { _, _ -> startTorPrivateWindow() }
             .show().styleDialog()
     }
 
+    private fun startTorPrivateWindow() {
+        if (torServiceBound && torService != null && TorService.STATUS_ON == lastTorStatus) {
+            launchTorWindow(pendingTorStartUrl ?: homeUrl)
+            return
+        }
+        pendingTorStartUrl = homeUrl
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(8), dp(22), dp(8))
+            addView(label("Connecting to the Tor network…", 16f, ink, true))
+            addView(label("The first connection can take a little while. Aster will open the private window only after Tor reports an established circuit.", 13f, muted, false).apply { setPadding(0, dp(8), 0, 0) })
+        }
+        torStartupDialog = AlertDialog.Builder(this)
+            .setTitle("Starting Tor")
+            .setView(content)
+            .setNegativeButton("Cancel") { _, _ -> failTorWindowStart(null) }
+            .create().also { it.show(); it.styleDialog() }
+        if (!torWindowReceiverRegistered) {
+            val filter = IntentFilter().apply {
+                addAction(TorService.ACTION_STATUS)
+                addAction(TorService.ACTION_ERROR)
+                addAction(TorPrivateActivity.ACTION_WINDOW_CLOSED)
+            }
+            ContextCompat.registerReceiver(this, torWindowReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+            torWindowReceiverRegistered = true
+        }
+        val serviceIntent = Intent(this, TorService::class.java)
+        try {
+            if (!torServiceBound) torServiceBound = bindService(serviceIntent, torServiceConnection, Context.BIND_AUTO_CREATE)
+            startService(serviceIntent)
+            torStartupHandler.removeCallbacks(torStartupTimeout)
+            torStartupHandler.postDelayed(torStartupTimeout, 150_000L)
+        } catch (error: Exception) {
+            failTorWindowStart("Could not start the bundled Tor service: ${error.message ?: "unknown error"}")
+        }
+    }
+
+    private var lastTorStatus: String? = null
+
+    private fun launchPendingTorWindow() {
+        if (pendingTorStartUrl == null) return
+        val port = torService?.socksPort ?: 0
+        if (port !in 1..65535) return
+        val url = pendingTorStartUrl ?: homeUrl
+        pendingTorStartUrl = null
+        torStartupHandler.removeCallbacks(torStartupTimeout)
+        torStartupDialog?.dismiss(); torStartupDialog = null
+        launchTorWindow(url, port)
+    }
+
+    private fun launchTorWindow(url: String, socksPort: Int = torService?.socksPort ?: 0) {
+        if (socksPort !in 1..65535) {
+            pendingTorStartUrl = url
+            return
+        }
+        startActivity(Intent(this, TorPrivateActivity::class.java)
+            .putExtra(TorPrivateActivity.EXTRA_SOCKS_PORT, socksPort)
+            .putExtra(TorPrivateActivity.EXTRA_START_URL, url))
+    }
+
+    private fun failTorWindowStart(error: String?) {
+        torStartupHandler.removeCallbacks(torStartupTimeout)
+        pendingTorStartUrl = null
+        torStartupDialog?.dismiss(); torStartupDialog = null
+        releaseTorService()
+        if (!error.isNullOrBlank()) message("Tor connection failed", error)
+    }
+
+    private fun releaseTorService() {
+        lastTorStatus = null
+        torStartupHandler.removeCallbacks(torStartupTimeout)
+        if (torServiceBound) runCatching { unbindService(torServiceConnection) }
+        torServiceBound = false
+        torService = null
+        runCatching { stopService(Intent(this, TorService::class.java)) }
+        if (torWindowReceiverRegistered) {
+            runCatching { unregisterReceiver(torWindowReceiver) }
+            torWindowReceiverRegistered = false
+        }
+    }
+
     private fun chooseTheme() {
-        val themes = arrayOf("Midnight", "Ocean", "Light", "Aurora", "Forest", "Ember", "Rose", "Cobalt", "Sakura", "Sand", "Glacier", "Solar", "Violet", "Mint", "Graphite")
+        val themes = arrayOf("Midnight", "Ocean", "Light", "Aurora", "Forest", "Ember", "Rose", "Cobalt", "Sakura", "Sand", "Glacier", "Solar", "Violet", "Mint", "Graphite", "Plum", "Coral", "Lagoon", "Arctic")
         AlertDialog.Builder(this).setTitle("Choose a theme").setSingleChoiceItems(themes, themes.indexOf(themeName).coerceAtLeast(0)) { d, index ->
             themeName=themes[index]; prefs.edit().putString("theme",themeName).apply(); applyTheme(); d.dismiss()
             tabs.filter { it.url.startsWith(homeUrl) }.forEach { it.url = homeUrl; it.loaded = false }
@@ -964,6 +1121,10 @@ class MainActivity : Activity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (!::runtime.isInitialized || !::gecko.isInitialized) return
+        browserMenuDialog?.dismiss()
+        browserMenuDialog = null
+        siteShieldsDialog?.dismiss()
+        siteShieldsDialog = null
         importCrossEngineTabs(intent)
         if (tabs.none { it.id == activeId }) activeId = tabs.firstOrNull()?.id ?: 0L
         if (tabs.isEmpty()) createTab(homeUrl) else selectTab(activeId)
@@ -974,6 +1135,9 @@ class MainActivity : Activity() {
         (getExternalFilesDir("ai-models") ?: File(filesDir, "ai-models")).apply { mkdirs() }
 
     private fun localModelFile(name: String): File = File(localModelDirectory(), name)
+
+    private fun localModelSpec(key: String? = prefs.getString("local_ai_download_model", "qwen3-0.6b")): LocalModelSpec =
+        LOCAL_MODELS.firstOrNull { it.key == key } ?: LOCAL_MODELS.first()
 
     private fun installedLocalModel(): File? {
         val saved = prefs.getString("local_ai_model_path", null)
@@ -1051,7 +1215,7 @@ class MainActivity : Activity() {
         val aiMemory = (getSystemService(ACTIVITY_SERVICE) as ActivityManager).let { manager ->
             val info = ActivityManager.MemoryInfo()
             manager.getMemoryInfo(info)
-            "${formatBytes(info.availMem)} memory currently available · large models need substantial free RAM"
+            "${formatBytes(info.availMem)} RAM available · inference stays on this device"
         }
         localAiStatus = label(
             if (localAiHarness.isReady) "Ready · on-device · $aiMemory" else "Choose a model to start chat · $aiMemory",
@@ -1059,8 +1223,8 @@ class MainActivity : Activity() {
         ).apply { setPadding(0, dp(4), 0, 0); maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END }
         modelCard.addView(localAiStatus)
         val modelActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        val download = button("↓  Gemma 4 · 2.59 GB", "Download or cancel Gemma 4 E2B model") {
-            if (localAiDownloadId >= 0) cancelLocalModelDownload() else confirmLocalModelDownload()
+        val download = button("↓  Get a model · compact option 329 MiB", "Choose and download a local AI model") {
+            if (localAiDownloadId >= 0) cancelLocalModelDownload() else chooseLocalModelDownload()
         }.apply {
             textSize = 10f; setTextColor(dark); setTypeface(null, Typeface.BOLD); background = shape(accent, 11)
         }
@@ -1185,16 +1349,29 @@ class MainActivity : Activity() {
         startActivityForResult(intent, REQUEST_LOCAL_MODEL)
     }
 
-    private fun confirmLocalModelDownload() {
+    private fun chooseLocalModelDownload() {
+        val choices = LOCAL_MODELS.map { "${it.name} · ${it.sizeLabel} · ${it.license}" }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Choose a local model")
+            .setItems(choices) { _, index -> confirmLocalModelDownload(LOCAL_MODELS[index]) }
+            .setNegativeButton("Cancel", null)
+            .show().styleDialog()
+    }
+
+    private fun confirmLocalModelDownload(model: LocalModelSpec) {
         if (localAiDownloadId >= 0) {
             cancelLocalModelDownload()
             return
         }
         AlertDialog.Builder(this)
-            .setTitle("Download Gemma 4 E2B")
-            .setMessage("Download the official 2.59 GB LiteRT-LM model from Hugging Face. Aster verifies its SHA-256 checksum before loading it. Downloads use Wi-Fi only and can continue through Android's download service if you leave this screen. Keep at least 3 GB free; the model runs locally after download.")
+            .setTitle("Download ${model.name}")
+            .setMessage(if (model.key == "qwen3-0.6b") {
+                "Download the pinned Qwen3 0.6B LiteRT-LM model (${model.sizeLabel}, ${model.license}). Its LiteRT-LM package includes Qwen3 tool-call parsing for Aster's browser actions. Aster verifies the exact size and SHA-256 before loading. Wi-Fi only; allow about 500 MiB free."
+            } else {
+                "Download the official 2.59 GB LiteRT-LM model (${model.license}). Aster verifies its SHA-256 checksum before loading. Wi-Fi only; keep at least 3 GB free. It is larger and may run better on high-memory devices."
+            })
             .setNegativeButton("Cancel", null)
-            .setPositiveButton("Download") { _, _ -> startLocalModelDownload() }
+            .setPositiveButton("Download") { _, _ -> startLocalModelDownload(model) }
             .show().styleDialog()
     }
 
@@ -1205,28 +1382,30 @@ class MainActivity : Activity() {
         localAiDownloadId = -1L
         localAiDownloadPoll.removeCallbacks(pollLocalAiDownload)
         prefs.edit().remove("local_ai_download_id").apply()
-        localModelFile("$GEMMA_MODEL_NAME.download").delete()
-        localAiDownloadButton?.text = "↓  Get Gemma 4 E2B · 2.59 GB"
+        localModelFile("${localModelSpec().fileName}.download").delete()
+        localAiDownloadButton?.text = "↓  Get a model · compact option 329 MiB"
         setLocalAiStatus("Download cancelled · the partial file was removed")
     }
 
-    private fun startLocalModelDownload() {
+    private fun startLocalModelDownload(model: LocalModelSpec) {
         val directory = localModelDirectory()
         val available = runCatching { android.os.StatFs(directory.absolutePath).availableBytes }.getOrDefault(0L)
-        if (available < MIN_MODEL_DOWNLOAD_BYTES) {
-            message("Free up storage", "Gemma 4 E2B is a 2.59 GB download. Aster needs at least 3 GB free for the complete file. Available: ${formatBytes(available)}.")
+        val minimumFree = if (model.expectedBytes > 0) model.expectedBytes + 128L * 1024L * 1024L else 3L * 1024L * 1024L * 1024L
+        if (available < minimumFree) {
+            message("Free up storage", "${model.name} needs about ${formatBytes(minimumFree)} free for download and verification. Available: ${formatBytes(available)}.")
             return
         }
-        val target = localModelFile("$GEMMA_MODEL_NAME.download")
+        prefs.edit().putString("local_ai_download_model", model.key).apply()
+        val target = localModelFile("${model.fileName}.download")
         target.delete()
-        val request = DownloadManager.Request(Uri.parse(GEMMA_MODEL_URL))
+        val request = DownloadManager.Request(Uri.parse(model.url))
             .setTitle("Aster local AI model")
-            .setDescription("Downloading and verifying Gemma 4 E2B · 2.59 GB · Wi-Fi only")
+            .setDescription("Downloading and verifying ${model.name} · ${model.sizeLabel} · Wi-Fi only")
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             .setAllowedOverMetered(false)
             .setAllowedOverRoaming(false)
             .setMimeType("application/octet-stream")
-            .setDestinationInExternalFilesDir(this, "ai-models", "$GEMMA_MODEL_NAME.download")
+            .setDestinationInExternalFilesDir(this, "ai-models", "${model.fileName}.download")
         localAiDownloadId = try {
             (getSystemService(DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
         } catch (error: Exception) {
@@ -1244,15 +1423,17 @@ class MainActivity : Activity() {
     }
 
     private fun verifyDownloadedModel() {
-        val staged = localModelFile("$GEMMA_MODEL_NAME.download")
-        val installed = localModelFile(GEMMA_MODEL_NAME)
+        val model = localModelSpec()
+        val staged = localModelFile("${model.fileName}.download")
+        val installed = localModelFile(model.fileName)
         Thread({
             var candidate: File? = null
             try {
                 // Accept the original DownloadManager destination so app updates do not discard an in-flight model transfer.
                 val downloaded = if (staged.isFile) staged else installed
                 candidate = downloaded
-                require(downloaded.isFile && downloaded.length() > 2L * 1024L * 1024L * 1024L) {
+                val complete = if (model.expectedBytes > 0) downloaded.length() == model.expectedBytes else downloaded.length() > 2L * 1024L * 1024L * 1024L
+                require(downloaded.isFile && complete) {
                     "The downloaded file is incomplete (${formatBytes(downloaded.length())}). Retry on Wi-Fi."
                 }
                 val digest = java.security.MessageDigest.getInstance("SHA-256")
@@ -1265,7 +1446,7 @@ class MainActivity : Activity() {
                     } while (count >= 0)
                 }
                 val actualHash = digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
-                require(actualHash.equals(GEMMA_MODEL_SHA256, ignoreCase = true)) {
+                require(actualHash.equals(model.sha256, ignoreCase = true)) {
                     "The model checksum did not match. The partial file was discarded; retry the download."
                 }
                 if (downloaded.absolutePath != installed.absolutePath) {
@@ -1274,7 +1455,7 @@ class MainActivity : Activity() {
                 }
                 prefs.edit().putString("local_ai_model_path", installed.absolutePath).apply()
                 runOnUiThread {
-                    localAiDownloadButton?.text = "Download again"
+                    localAiDownloadButton?.text = "↓  Get another model"
                     setLocalAiStatus("Model verified · loading on this device…")
                     loadLocalAiModel(installed)
                 }
@@ -1329,9 +1510,10 @@ class MainActivity : Activity() {
     private fun loadLocalAiModel(model: File) {
         val memory = ActivityManager.MemoryInfo()
         (getSystemService(ACTIVITY_SERVICE) as ActivityManager).getMemoryInfo(memory)
-        if (model.name.contains("gemma-4-E2B", ignoreCase = true) && memory.availMem < 1_850L * 1024L * 1024L) {
-            setLocalAiStatus("Not enough free memory for Gemma 4 E2B · ${formatBytes(memory.availMem)} available. Close other apps or use a smaller compatible model.")
-            message("Free memory first", "Gemma 4 E2B can use around 1.7 GB of memory. Android reports ${formatBytes(memory.availMem)} currently available, so Aster did not start it.")
+        val modelSpec = LOCAL_MODELS.firstOrNull { model.name == it.fileName }
+        if (modelSpec != null && memory.availMem < modelSpec.minimumRamBytes) {
+            setLocalAiStatus("Low free memory for ${modelSpec.name} · ${formatBytes(memory.availMem)} available. Close other apps and try again.")
+            message("Free memory first", "${modelSpec.name} needs more working memory than Android currently reports (${formatBytes(memory.availMem)} available). Close other apps, or import a smaller compatible model.")
             return
         }
         localAiModelTitle?.text = model.name
@@ -1484,6 +1666,33 @@ class MainActivity : Activity() {
         sendLocalAiMessage(raw, raw)
     }
 
+    /** Route common browser commands locally so small models that miss a tool call still act reliably. */
+    private fun runExplicitBrowserCommand(prompt: String): String? {
+        val normalized = prompt.lowercase(java.util.Locale.ROOT)
+        val tools = createBrowserTools()
+        if (("tab" in normalized || "tabs" in normalized) &&
+            ("find" in normalized || "list" in normalized || "show" in normalized || "open" in normalized)) {
+            val results = tools.searchOpenTabs("")
+            if (results.isEmpty()) return "There are no regular open tabs to list. Private tabs are kept out of the assistant."
+            return results.joinToString(prefix = "Open tabs (${results.size}):\n", separator = "\n") { tab ->
+                val active = if (tab["active"] == "true") " · current" else ""
+                "• ${tab["title"].orEmpty()} — ${tab["url"].orEmpty()}$active"
+            }
+        }
+        if ("privacy" in normalized && ("site" in normalized || "page" in normalized || "protection" in normalized || "track" in normalized)) {
+            val details = tools.inspectCurrentPagePrivacy()
+            return details.entries.joinToString(prefix = "Current privacy settings:\n", separator = "\n") { (key, value) -> "• $key: $value" }
+        }
+        val url = Regex("https?://[^\\s<>\\\"]+", RegexOption.IGNORE_CASE).find(prompt)?.value?.trimEnd('.', ',', ')', ']', '}', ';')
+        if (url != null && ("open" in normalized || "visit" in normalized || "go to" in normalized)) {
+            return tools.openWebsiteInNewTab(url)
+        }
+        val searchTerms = Regex("(?:search(?: the)? web for|look up)\\s+(.+)", RegexOption.IGNORE_CASE)
+            .find(prompt)?.groupValues?.getOrNull(1)?.trim()?.trimEnd('.', '?')
+        if (!searchTerms.isNullOrBlank()) return tools.searchTheWeb(searchTerms)
+        return null
+    }
+
     private fun sendLocalAiMessage(visiblePrompt: String, modelPrompt: String) {
         val prompt = visiblePrompt.trim()
         val inferencePrompt = modelPrompt.trim()
@@ -1495,6 +1704,13 @@ class MainActivity : Activity() {
         localAiInput?.text?.clear()
         addLocalAiBubble(prompt, true)
         val answer = addLocalAiBubble("Thinking…", false)
+        runCatching { runExplicitBrowserCommand(inferencePrompt) }.getOrNull()?.let { result ->
+            answer.text = result
+            aiChatMessages.lastOrNull()?.takeIf { !it.isUser }?.let { aiChatMessages[aiChatMessages.lastIndex] = it.copy(text = result) }
+            localAiSend?.isEnabled = true
+            setLocalAiStatus("Browser action completed · model and browser data remain on this device")
+            return
+        }
         localAiSend?.isEnabled = false
         localAiHarness.send(inferencePrompt, object : LocalAiHarness.ReplyListener {
             private var received = false
@@ -2012,6 +2228,8 @@ class MainActivity : Activity() {
         content.addView(done)
 
         val dialog = AlertDialog.Builder(this).create()
+        siteShieldsDialog = dialog
+        dialog.setOnDismissListener { if (siteShieldsDialog === dialog) siteShieldsDialog = null }
         dialog.setView(content)
         dialog.setOnShowListener { dialog.window?.apply {
             setBackgroundDrawable(shape(panel, 26)); setDimAmount(0.58f)
@@ -2260,6 +2478,10 @@ class MainActivity : Activity() {
             "Violet" -> "violet"
             "Mint" -> "mint"
             "Graphite" -> "graphite"
+            "Plum" -> "plum"
+            "Coral" -> "coral"
+            "Lagoon" -> "lagoon"
+            "Arctic" -> "arctic"
             else -> themeName.lowercase()
         }
         return "$homeUrl?theme=$key"

@@ -2,27 +2,27 @@
 
 ## Public Android release
 
-The current Chromium/Afterbird build is published as [Aster Browser v2.0.0](https://github.com/B1progame/aster-browser/releases/tag/v2.0.0). Choose the APK that matches the device CPU: `AsterBrowser-v2.0.0-Android-arm64.apk` for Android phones and Meta Quest, or `AsterBrowser-v2.0.0-Android-x86_64.apk` for the Android Studio emulator. Android will ask you to confirm installation. The public source repository is [B1progame/aster-browser](https://github.com/B1progame/aster-browser).
+The latest GeckoView release is [Aster Browser v2.2.0](https://github.com/B1progame/aster-browser/releases/tag/v2.2.0), with embedded Tor private windows. The latest Chromium/Afterbird release remains [v2.1.0](https://github.com/B1progame/aster-browser/releases/tag/v2.1.0), because a matching Chromium 2.2.0 build is not available yet. Gecko APKs are `AsterBrowser-v2.2.0-Gecko-Android-arm64.apk` for ARM64 phones and Quest, and `AsterBrowser-v2.2.0-Gecko-Android-x86_64.apk` for the Android Studio emulator. Chromium v2.1.0 APKs remain available on its release page. Android will ask you to confirm sideloading. The public source repository is [B1progame/aster-browser](https://github.com/B1progame/aster-browser).
 
 Aster is an Android browser project with two engine builds:
 
-- The maintained app prototype uses GeckoView and package ID `app.aster.browser`.
-- An experimental Chromium/Afterbird Android shell is built separately as package ID `app.aster.chromium` to test Chromium extensions without replacing the GeckoView app or its data.
+- The GeckoView build uses package ID `app.aster.browser`.
+- The Chromium/Afterbird build uses package ID `app.aster.chromium`. Both engine APKs share the Aster product identity, while keeping separate browser profiles and site data.
 
 ## GeckoView prototype
 
 - Touch-oriented browser shell with address/search, navigation, home, tabs, bookmarks, recent history, and theme/search-engine settings.
 - Saved open-tab URLs and selected tab, restored when the app restarts.
-- Fifteen saved app themes: Midnight, Ocean, Light, Aurora, Forest, Ember, Rose, Cobalt, Sakura, Sand, Glacier, Solar, Violet, Mint, and Graphite.
+- Nineteen saved app themes: Midnight, Ocean, Light, Aurora, Forest, Ember, Rose, Cobalt, Sakura, Sand, Glacier, Solar, Violet, Mint, Graphite, Plum, Coral, Lagoon, and Arctic.
 - Settings → Browser engine opens the separately installed Chromium build for Chrome extensions and hands over normal HTTP(S) tab URLs and the selected tab. The Chromium source patch imports those tabs on cold and warm launches and skips duplicate URLs. Switching back transfers Chromium's URLs, page titles, and selected tab to GeckoView. This is a tab handoff, not a shared browser profile: cookies, signed-in sessions, history, bookmarks, site permissions, and extensions remain engine-specific.
 - GeckoView tracking protection, fingerprinting and cryptomining protection, and Global Privacy Control.
 - A private-tab mode backed by GeckoView's private session setting. Private tabs are omitted from saved tabs, browsing history, and the local privacy activity counter.
 - A local seven-day protection dashboard based on GeckoView's blocked-resource events, plus custom AI URL templates and a GitHub feature-request draft flow.
-- Aster's on-device AI harness uses LiteRT-LM for local multi-turn chat, model import or optional Wi-Fi download, a real inference self-test, and opt-in site connection analysis. See [`docs/ON_DEVICE_AI.md`](docs/ON_DEVICE_AI.md) for model setup, storage, memory, and privacy details.
+- Aster's on-device AI harness uses LiteRT-LM for local multi-turn chat, model import or optional Wi-Fi download, a real inference self-test, and opt-in site connection analysis. It offers a pinned 0.6B Qwen3 model download (about 329 MiB) alongside Gemma 4 E2B. See [`docs/ON_DEVICE_AI.md`](docs/ON_DEVICE_AI.md) for model setup, storage, memory, and privacy details.
 - The local AI harness can list/search open Gecko tabs, open a validated HTTP(S) URL in a new tab, and search the configured engine. Local inference stays on-device; web search sends the search query to the selected search provider. It cannot read page bodies or invoke destructive actions.
 - Website shredder clears GeckoView's host-scoped site data and site settings, closes matching regular tabs, and removes matching Aster history and bookmark entries after confirmation. Optional auto-shred clears site data when navigating away from a host or closing its tab. This does not erase data held by websites, Chromium's separate profile, or external password managers.
 - Startup warm-up for GeckoView and per-session media suspension disabled to reduce avoidable first-page and background-media delays.
-- Tor setup guidance for Orbot's per-app VPN. Aster does not include a Tor client or claim that private tabs route over Tor automatically.
+- Tor private windows in the GeckoView build start an embedded Guardian Project Tor client and wait for an established circuit before opening the isolated private profile. Traffic uses SOCKS5 with remote DNS and has no direct-connection fallback; HTTP/3 and WebRTC are disabled in the Tor profile. The Tor check endpoint confirmed `IsTor: true` on the Android Studio Pixel 10a emulator. This provides Tor routing and a private session, but does not provide full Tor Browser fingerprinting defenses or anti-fingerprinting parity.
 - PC sharing is visible as “In development” and sends no data.
 - ARM64 Android and x86_64 emulator debug APKs are in `dist/`.
 - Issue #1 candidate release APKs are `dist/AsterBrowser-Gecko-arm64-issue1-candidate.apk` and `dist/AsterBrowser-Gecko-x86_64-issue1-candidate.apk`. Both use the existing development signing certificate so the x86 build could update the installed emulator app in place; they are not Play Store releases.
