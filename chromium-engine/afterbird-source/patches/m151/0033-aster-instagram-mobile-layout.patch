@@ -1,0 +1,40 @@
+From: Aster Browser <aster@example.invalid>
+Subject: [PATCH] Prefer desktop sites on Quest 3S and keep Instagram usable
+
+Request desktop sites by default on Meta Quest 3S, including Instagram. Keep
+the mobile-site menu available so users can choose a site's mobile layout.
+
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tab/TabImpl.java b/chrome/android/java/src/org/chromium/chrome/browser/tab/TabImpl.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/tab/TabImpl.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/tab/TabImpl.java
+@@ -415,1 +415,1 @@
+-        params.setOverrideUserAgent(calculateUserAgentOverrideOption());
++        params.setOverrideUserAgent(calculateUserAgentOverrideOption(params.getUrl()));
+@@ -1408,5 +1408,26 @@
+-    private @UserAgentOverrideOption int calculateUserAgentOverrideOption() {
++    private @UserAgentOverrideOption int calculateUserAgentOverrideOption() {
++        GURL currentUrl = getUrl();
++        return calculateUserAgentOverrideOption(currentUrl == null ? "" : currentUrl.getSpec());
++    }
++
++    private @UserAgentOverrideOption int calculateUserAgentOverrideOption(String targetUrl) {
+         boolean currentRequestDesktopSite = getWebContents() == null
+                 ? false
+                 : getWebContents().getNavigationController().getUseDesktopUserAgent();
++        boolean isQuest3s = ("Oculus".equalsIgnoreCase(android.os.Build.MANUFACTURER)
++                        || "Meta".equalsIgnoreCase(android.os.Build.MANUFACTURER))
++                && ("panther".equalsIgnoreCase(android.os.Build.DEVICE)
++                        || "quest3s".equalsIgnoreCase(android.os.Build.DEVICE)
++                        || "quest 3s".equalsIgnoreCase(android.os.Build.MODEL));
++        if (!mUserForcedUserAgent && isQuest3s) {
++            return UserAgentOverrideOption.TRUE;
++        }
++        String targetHost = new GURL(targetUrl).getHost().toLowerCase(java.util.Locale.ROOT);
++        boolean isInstagram = "instagram.com".equals(targetHost)
++                || targetHost.endsWith(".instagram.com");
++        if (!mUserForcedUserAgent && isInstagram) {
++            return currentRequestDesktopSite
++                    ? UserAgentOverrideOption.FALSE
++                    : UserAgentOverrideOption.INHERIT;
++        }
+         if (!mUserForcedUserAgent && DeviceFormFactor.isNonMultiDisplayContextOnTablet(getContext())

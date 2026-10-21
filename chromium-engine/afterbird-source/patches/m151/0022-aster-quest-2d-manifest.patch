@@ -14,8 +14,10 @@ diff --git a/chrome/android/java/AndroidManifest.xml b/chrome/android/java/Andro
 -    <uses-permission-sdk-23 android:name="android.permission.HAND_TRACKING" />
 +    <!-- Flat browser panel: Quest maps controller/hand interaction to UI events; no tracking permission. -->
      {% endif %}
-@@ -232,3 +229,6 @@
-         {% block extra_application_attributes %}{% endblock %}>
+@@ -232,3 +229,7 @@
+-        {% block extra_application_attributes %}{% endblock %}>
++        {% block extra_application_attributes %}{% endblock %}
++        android:taskAffinity="app.aster.shared">
 
 +        <meta-data
 +            android:name="com.oculus.supportedDevices"

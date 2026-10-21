@@ -54,8 +54,12 @@
     .site:nth-child(1) { animation:enter 320ms var(--ease) 55ms both; } .site:nth-child(2) { animation:enter 320ms var(--ease) 80ms both; } .site:nth-child(3) { animation:enter 320ms var(--ease) 105ms both; } .site:nth-child(4) { animation:enter 320ms var(--ease) 130ms both; }
     .site:hover,.site:focus-visible { background:var(--raised); border-color:color-mix(in srgb,var(--accent) 52%,var(--border)); outline:2px solid color-mix(in srgb,var(--accent) 52%,transparent); outline-offset:2px; }
     .site:active { transform:scale(.98); }
-    .site-mark { width:38px; height:38px; flex:none; display:grid; place-items:center; border-radius:13px; background:var(--raised); color:var(--accent); font-size:14px; font-weight:750; }
-    .youtube .site-mark { color:#ff7c82; } .reddit .site-mark { color:#ff9a63; } .wiki .site-mark { color:#d5c3ff; } .hn .site-mark { color:#ffb977; }
+    .site-mark { width:38px; height:38px; flex:none; display:grid; place-items:center; border-radius:13px; background:var(--raised); color:var(--accent); }
+    .site-mark svg { display:block; width:24px; height:24px; }
+    .youtube .site-mark { color:#ff4e59; background:color-mix(in srgb,#ff3344 13%,var(--raised)); }
+    .reddit .site-mark { color:#ff6b35; background:color-mix(in srgb,#ff4500 13%,var(--raised)); }
+    .wiki .site-mark { color:var(--ink); background:color-mix(in srgb,#8b9ba7 14%,var(--raised)); }
+    .hn .site-mark { color:#fff; background:#f26522; }
     .site-name { min-width:0; font-size:14px; font-weight:600; letter-spacing:-.01em; }
     .addons { display:flex; align-items:center; gap:14px; margin-top:22px; padding:15px; border:1px solid var(--border); border-radius:20px; background:var(--panel); color:inherit; text-decoration:none; transition:transform 160ms var(--ease),border-color 160ms var(--ease),background-color 160ms var(--ease); animation:enter 360ms var(--ease) 145ms both; }
     .addons:hover,.addons:focus-visible { border-color:color-mix(in srgb,var(--accent) 58%,var(--border)); background:var(--raised); outline:2px solid color-mix(in srgb,var(--accent) 40%,transparent); outline-offset:2px; }
@@ -94,10 +98,22 @@
     </header>
     <div class="section-head"><h2>Quick access</h2><span>Go somewhere familiar</span></div>
     <nav class="sites" aria-label="Quick access">
-      <a class="site youtube" href="https://www.youtube.com/"><span class="site-mark" aria-hidden="true">▶</span><span class="site-name">YouTube</span></a>
-      <a class="site wiki" href="https://www.wikipedia.org/"><span class="site-mark" aria-hidden="true">W</span><span class="site-name">Wikipedia</span></a>
-      <a class="site reddit" href="https://www.reddit.com/"><span class="site-mark" aria-hidden="true">r/</span><span class="site-name">Reddit</span></a>
-      <a class="site hn" href="https://news.ycombinator.com/"><span class="site-mark" aria-hidden="true">Y</span><span class="site-name">Hacker News</span></a>
+      <a class="site youtube" href="https://www.youtube.com/">
+        <span class="site-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="2.5" y="5" width="19" height="14" rx="4.2" fill="currentColor"/><path d="M10 8.5v7l6-3.5-6-3.5Z" fill="#fff"/></svg></span>
+        <span class="site-name">YouTube</span>
+      </a>
+      <a class="site wiki" href="https://www.wikipedia.org/">
+        <span class="site-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.1" stroke="currentColor" stroke-width="1.5"/><path d="m5.5 8.2 1.4.2 2.2 7.1 2-5.2-.6-1.9-1.1-.2V7h4.2v1.2l-1.1.2 2.1 5.8 1.7-5.8-1.2-.2V7h3.3v1.2l-1 .2-2.6 7.7h-1.4l-2-5.2-2 5.2H8L5.5 8.2Z" fill="currentColor"/></svg></span>
+        <span class="site-name">Wikipedia</span>
+      </a>
+      <a class="site reddit" href="https://www.reddit.com/">
+        <span class="site-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5.2a6.9 6.9 0 0 0-4.3 1.5l-2-.8a1.7 1.7 0 1 0-.7 1.4l1 .4a5.4 5.4 0 0 0-1.3 3.5c0 3.3 3.3 5.9 7.3 5.9s7.3-2.6 7.3-5.9a5.4 5.4 0 0 0-1.3-3.5l1-.4a1.7 1.7 0 1 0-.6-1.4l-2 .8A6.9 6.9 0 0 0 13 5.2l.8-3 2.1.5a1.3 1.3 0 1 0 .3-1.3l-3.3-.8a.7.7 0 0 0-.8.5L11 5.2Zm-2.1 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm4.2 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm-5 2.4a.6.6 0 0 1 .9 0 2.8 2.8 0 0 0 4 0 .6.6 0 0 1 .9.8 4 4 0 0 1-5.8 0 .6.6 0 0 1 0-.8Z" fill="currentColor"/></svg></span>
+        <span class="site-name">Reddit</span>
+      </a>
+      <a class="site hn" href="https://news.ycombinator.com/">
+        <span class="site-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4.2 4h3.2l4.6 7.3L16.6 4h3.2l-6.3 9.6V20h-3v-6.4L4.2 4Z" fill="currentColor"/></svg></span>
+        <span class="site-name">Hacker News</span>
+      </a>
     </nav>
     <a class="addons" href="https://addons.mozilla.org/en-US/firefox/extensions/" aria-label="Browse Firefox add-ons">
       <span class="addon-mark" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 3v7m0 4v7M3 12h7m4 0h7M5.64 5.64l4.95 4.95m2.82 2.82 4.95 4.95m0-12.72-4.95 4.95m-2.82 2.82-4.95 4.95" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/></svg></span>

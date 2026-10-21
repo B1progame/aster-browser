@@ -117,7 +117,12 @@ prefs:
                 .build()
         )
         runtime?.warmUp()
-        val torSession = GeckoSession(GeckoSessionSettings.Builder().usePrivateMode(true).build())
+        val torSettings = GeckoSessionSettings.Builder().usePrivateMode(true).build()
+        if (AsterDevicePolicy.isMetaQuest3s()) {
+            torSettings.setUserAgentMode(GeckoSessionSettings.USER_AGENT_MODE_DESKTOP)
+            torSettings.setViewportMode(GeckoSessionSettings.VIEWPORT_MODE_DESKTOP)
+        }
+        val torSession = GeckoSession(torSettings)
         torSession.open(requireNotNull(runtime) { "Tor Gecko runtime was not created" })
         session = torSession
         buildBrowserUi(torSession)

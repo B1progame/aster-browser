@@ -1,0 +1,146 @@
+--- a/chrome/android/java/res/layout/new_tab_page_layout.xml
++++ b/chrome/android/java/res/layout/new_tab_page_layout.xml
+@@ -318,6 +318,63 @@
+             android:textStyle="bold" />
+     </LinearLayout>
+ 
++    <!-- Tor runs in Aster's isolated Gecko private-window process. -->
++    <LinearLayout
++        android:id="@+id/aster_tor_shortcut"
++        android:layout_width="match_parent"
++        android:layout_height="wrap_content"
++        android:layout_marginStart="28dp"
++        android:layout_marginTop="10dp"
++        android:layout_marginEnd="28dp"
++        android:background="@drawable/aster_ntp_extension_card"
++        android:clickable="true"
++        android:focusable="true"
++        android:foreground="?attr/selectableItemBackground"
++        android:gravity="center_vertical"
++        android:minHeight="72dp"
++        android:orientation="horizontal"
++        android:paddingStart="16dp"
++        android:paddingTop="12dp"
++        android:paddingEnd="18dp"
++        android:paddingBottom="12dp">
++        <ImageView
++            android:layout_width="38dp"
++            android:layout_height="38dp"
++            android:contentDescription="@null"
++            android:background="@drawable/aster_ntp_extension_icon_background"
++            android:padding="5dp"
++            android:src="@drawable/aster_ntp_logo" />
++        <LinearLayout
++            android:layout_width="0dp"
++            android:layout_height="wrap_content"
++            android:layout_marginStart="14dp"
++            android:layout_weight="1"
++            android:orientation="vertical">
++            <TextView
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:text="Tor private window"
++                android:textColor="@color/aster_brand_primary_text"
++                android:textSize="14sp"
++                android:textStyle="bold" />
++            <TextView
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_marginTop="3dp"
++                android:text="Open this page through Tor in a private Gecko session"
++                android:textColor="@color/aster_brand_secondary_text"
++                android:textSize="12sp" />
++        </LinearLayout>
++        <TextView
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_marginStart="8dp"
++            android:text="›"
++            android:textColor="@color/aster_brand_accent"
++            android:textSize="26sp"
++            android:textStyle="bold" />
++    </LinearLayout>
++
+     <!-- Composeplate / "AI Mode" -->
+     <ViewStub
+         android:id="@+id/composeplate_view_stub"
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+@@ -450,6 +450,57 @@
+             aiShortcut.setAlpha(0f);
+             aiShortcut.setTranslationY(10f * mActivity.getResources().getDisplayMetrics().density);
+             aiShortcut.animate().alpha(1f).translationY(0f).setStartDelay(220).setDuration(340).start();
++
++            View torShortcut = mNewTabPageLayout.findViewById(R.id.aster_tor_shortcut);
++            torShortcut.setOnClickListener(
++                    view -> {
++                        android.content.Intent intent = mActivity.getPackageManager()
++                                .getLaunchIntentForPackage("app.aster.browser");
++                        if (intent == null) {
++                            android.widget.Toast.makeText(
++                                            mActivity,
++                                            "Install Aster GeckoView to open a Tor private window",
++                                            android.widget.Toast.LENGTH_LONG)
++                                    .show();
++                            return;
++                        }
++                        org.chromium.chrome.browser.app.ChromeActivity activity =
++                                (org.chromium.chrome.browser.app.ChromeActivity) mActivity;
++                        org.chromium.chrome.browser.tabmodel.TabModel model =
++                                activity.getTabModelSelector().getModel(false);
++                        org.chromium.chrome.browser.tab.Tab tab =
++                                model.getTabAt(model.index());
++                        String url = tab == null || tab.getUrl() == null
++                                ? ""
++                                : tab.getUrl().getSpec();
++                        if (!url.startsWith("https://") && !url.startsWith("http://")) {
++                            url = "";
++                        }
++                        java.util.ArrayList<String> urls = new java.util.ArrayList<>();
++                        java.util.ArrayList<String> titles = new java.util.ArrayList<>();
++                        int active = 0;
++                        for (int i = 0; i < model.getCount(); i++) {
++                            org.chromium.chrome.browser.tab.Tab openTab = model.getTabAt(i);
++                            if (openTab == null || openTab.getUrl() == null) continue;
++                            String openUrl = openTab.getUrl().getSpec();
++                            if (!openUrl.startsWith("https://") && !openUrl.startsWith("http://")) continue;
++                            if (i == model.index()) active = urls.size();
++                            urls.add(openUrl);
++                            titles.add(openTab.getTitle() == null ? openUrl : openTab.getTitle().toString());
++                        }
++                        intent.putStringArrayListExtra("aster_tabs", urls);
++                        intent.putStringArrayListExtra("aster_tab_titles", titles);
++                        intent.putExtra("aster_active_tab", active);
++                        intent.putExtra("aster_tor_url", url);
++                        intent.putExtra("aster_action", "tor");
++                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
++                                | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
++                                | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
++                        mActivity.startActivity(intent);
++                    });
++            torShortcut.setAlpha(0f);
++            torShortcut.setTranslationY(10f * mActivity.getResources().getDisplayMetrics().density);
++            torShortcut.animate().alpha(1f).translationY(0f).setStartDelay(290).setDuration(340).start();
+         }
+         setSearchProviderInfo(searchProviderHasLogo, searchProviderIsGoogle);
+         initializeMostVisitedTilesCoordinator(
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/AsterUpdateManager.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/AsterUpdateManager.java
+@@ -110,7 +110,7 @@
+                 throw new IllegalStateException("Invalid Aster release tag");
+             }
+             String abi = androidAbiSuffix();
+-            String expectedName = "AsterBrowser-" + tag + "-Android-" + abi + ".apk";
++            String expectedName = "AsterBrowser-" + tag + "-Chromium-Android-" + abi + ".apk";
+             JSONArray assets = release.getJSONArray("assets");
+             for (int index = 0; index < assets.length(); index++) {
+                 JSONObject asset = assets.getJSONObject(index);
+--- a/chrome/android/java/res_chromium_base/values/channel_constants.xml
++++ b/chrome/android/java/res_chromium_base/values/channel_constants.xml
+@@ -12,5 +12,5 @@
+     <string name="search_widget_title" translatable="false">Aster search</string>
+     <string name="quick_action_search_widget_title" translatable="false">Aster quick action search</string>
+     <!-- Bump this with the matching public GitHub release tag. -->
+-    <string name="aster_release_version" translatable="false">2.1.0</string>
++    <string name="aster_release_version" translatable="false">3.0.0</string>
+ </resources>

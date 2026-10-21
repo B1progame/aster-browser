@@ -1,0 +1,65 @@
+diff --git a/chrome/android/java/AndroidManifest.xml b/chrome/android/java/AndroidManifest.xml
+--- a/chrome/android/java/AndroidManifest.xml
++++ b/chrome/android/java/AndroidManifest.xml
+@@ -601,7 +601,7 @@
+         <activity android:name="org.chromium.chrome.browser.ChromeTabbedActivity"
+             android:theme="@style/Theme.Chromium.TabbedMode"
+             android:exported="true"
+-            android:launchMode="singleTask"
++            android:launchMode="standard"
+             {% if is_desktop_android == "true" %}
+             android:persistableMode="persistAcrossReboots"
+             {% endif %}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+@@ -442,8 +442,7 @@
+                         intent.putStringArrayListExtra("aster_tab_titles", titles);
+                         intent.putExtra("aster_active_tab", active);
+                         intent.putExtra("aster_action", "ai");
+-                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+-                                | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
++                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                 | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                         mActivity.startActivity(intent);
+                     });
+@@ -478,9 +477,8 @@
+                             url = "";
+                         }
+                         intent.putExtra("aster_tor_url", url);
+                         intent.putExtra("aster_action", "tor");
+-                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+-                                | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
++                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                 | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                         mActivity.startActivity(intent);
+                     });
+@@ -520,5 +519,4 @@
+                         intent.putExtra("aster_action", "tools");
+-                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+-                                | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
++                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                 | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                         mActivity.startActivity(intent);
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
+@@ -381,3 +381,2 @@
+                             } else {
+-                                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                 activity.startActivity(launchIntent);
+@@ -421,5 +420,4 @@
+                             launchIntent.putExtra("aster_action", "tools");
+-                            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+-                                    | Intent.FLAG_ACTIVITY_CLEAR_TOP
++                            launchIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                     | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                             activity.startActivity(launchIntent);
+@@ -447,6 +445,5 @@
+                             launchIntent.putExtra("aster_action", "issue");
+                             launchIntent.putExtra("aster_issue_engine", "Chromium");
+-                            launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+-                                    | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
++                            launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                     | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                             activity.startActivity(launchIntent);

@@ -1,0 +1,48 @@
+From: Aster Browser <aster@example.invalid>
+Subject: [PATCH] Add Chromium entry point for privacy-safe issue drafts
+
+Allow users of the Chromium build to open the shared Aster issue-report flow.
+The report screen starts with no site information; users can add details
+themselves without forwarding any browser profile data across engine profiles.
+
+diff --git a/chrome/android/java/res/xml/main_preferences.xml b/chrome/android/java/res/xml/main_preferences.xml
+--- a/chrome/android/java/res/xml/main_preferences.xml
++++ b/chrome/android/java/res/xml/main_preferences.xml
+@@ -162,1 +162,6 @@
++    <Preference
++        android:key="aster_issue_report"
++        android:order="35"
++        android:title="Prepare issue report"
++        android:summary="Choose safe diagnostics and open a GitHub draft"/>
+ </PreferenceScreen>
+
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
+@@ -405,1 +405,26 @@
++        findPreference("aster_issue_report")
++                .setOnPreferenceClickListener(
++                        preference -> {
++                            onPreferenceSelected(preference);
++                            android.app.Activity activity = getActivity();
++                            if (activity == null) return true;
++                            android.content.Intent launchIntent = activity.getPackageManager()
++                                    .getLaunchIntentForPackage("app.aster.browser");
++                            if (launchIntent == null) {
++                                new android.app.AlertDialog.Builder(activity)
++                                        .setTitle("Aster issue reports unavailable")
++                                        .setMessage("Install Aster Browser to prepare a privacy-safe report.")
++                                        .setPositiveButton("Close", null)
++                                        .show();
++                                return true;
++                            }
++                            launchIntent.putExtra("aster_action", "issue");
++                            launchIntent.putExtra("aster_issue_engine", "Chromium");
++                            launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
++                                    | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
++                                    | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
++                            activity.startActivity(launchIntent);
++                            return true;
++                        });
++
+         IdentityManager identityManager =

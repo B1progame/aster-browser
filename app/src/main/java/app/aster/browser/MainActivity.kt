@@ -1,12 +1,17 @@
 package app.aster.browser
 
 import android.app.Activity
+import android.app.ActivityOptions
 import android.app.AlertDialog
 import android.app.DownloadManager
 import android.app.ActivityManager
+import android.animation.ValueAnimator
 import android.graphics.Color
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -20,6 +25,7 @@ import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.content.Context
+import android.content.ContentValues
 import android.content.Intent
 import android.content.BroadcastReceiver
 import android.content.ComponentName
@@ -27,6 +33,9 @@ import android.content.ServiceConnection
 import android.content.IntentFilter
 import android.net.Uri
 import android.os.IBinder
+import android.os.Environment
+import android.provider.MediaStore
+import android.view.PixelCopy
 import android.widget.*
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
@@ -64,6 +73,7 @@ private data class BrowserTab(
 )
 private data class AiNavigationEvent(val action: String, val title: String, val url: String)
 private data class AiChatMessage(val text: String, val isUser: Boolean)
+private data class IssueCapture(val bitmap: Bitmap, val addressRect: Rect?, val pageRect: Rect?)
 private const val REQUEST_EXTENSION_FILE = 4201
 private const val REQUEST_LOCAL_MODEL = 4202
 private const val MAX_EXTENSION_BYTES = 50L * 1024L * 1024L
@@ -119,6 +129,10 @@ class MainActivity : Activity() {
     private lateinit var address: EditText
     private lateinit var addressRow: LinearLayout
     private lateinit var privacyBadge: TextView
+    private var wideBrowserShell = false
+    private var tabletTabsHost: View? = null
+    private var tabletTabsRow: LinearLayout? = null
+    private var tabletEngineStatus: TextView? = null
     private lateinit var localAiHarness: LocalAiHarness
     private val tabs = mutableListOf<BrowserTab>()
     private val homeUrl = "resource://android/assets/home.html"
@@ -148,6 +162,9 @@ class MainActivity : Activity() {
     private var torWindowReceiverRegistered = false
     private var pendingTorStartUrl: String? = null
     private var torStartupDialog: AlertDialog? = null
+    private var torProgressHeadline: TextView? = null
+    private var torProgressDetail: TextView? = null
+    private var torLaunchQueued = false
     private val torStartupHandler = Handler(Looper.getMainLooper())
     private val torStartupTimeout = Runnable { failTorWindowStart("Tor did not connect in time. Check your network and try again.") }
     private val torServiceConnection = object : ServiceConnection {
@@ -162,6 +179,7 @@ class MainActivity : Activity() {
             when (intent?.action) {
                 TorService.ACTION_STATUS -> {
                     lastTorStatus = intent.getStringExtra(TorService.EXTRA_STATUS)
+                    updateTorProgress(lastTorStatus)
                     when (lastTorStatus) {
                         TorService.STATUS_ON -> launchPendingTorWindow()
                         TorService.STATUS_OFF -> if (pendingTorStartUrl != null) failTorWindowStart("Tor stopped before it could connect. No Tor window was opened.")
@@ -314,7 +332,7 @@ class MainActivity : Activity() {
         importCrossEngineTabs(intent)
         buildShell()
         selectTab(tabs.firstOrNull { it.id == activeId }?.id ?: tabs.first().id)
-        if (intent.getStringExtra("aster_action") == "ai") showLocalAi()
+        handleAsterAction(intent)
     }
 
     private fun applyTheme() {
@@ -345,66 +363,225 @@ class MainActivity : Activity() {
     }
 
     private fun buildShell() {
+        wideBrowserShell = resources.configuration.screenWidthDp >= 760
+        tabletTabsHost = null
+        tabletTabsRow = null
+        tabletEngineStatus = null
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(dark) }
         ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             insets
         }
-        val top = LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(16),dp(10),dp(16),dp(10)); setBackgroundColor(dark) }
-        val brand = LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL }
+
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(if (wideBrowserShell) 18 else 16), dp(if (wideBrowserShell) 13 else 10), dp(if (wideBrowserShell) 18 else 16), dp(12))
+            background = shape(panel, if (wideBrowserShell) 24 else 21)
+            elevation = dp(2).toFloat()
+        }
+        val brand = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val mark = ImageView(this).apply {
             setImageResource(R.drawable.ic_aster_foreground)
             scaleType = ImageView.ScaleType.FIT_CENTER
             setPadding(dp(5), dp(5), dp(5), dp(5))
-            background = shape(raised, 18)
-            layoutParams = LinearLayout.LayoutParams(dp(38), dp(38))
+            background = shape(raised, 15)
+            layoutParams = LinearLayout.LayoutParams(dp(if (wideBrowserShell) 40 else 38), dp(if (wideBrowserShell) 40 else 38))
             contentDescription = "Aster Browser"
         }
-        val nameCol = LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(10),0,0,0) }
-        nameCol.addView(label("ASTER", 13f, ink, true)); nameCol.addView(label("PRIVATE BY DEFAULT",9f,muted,false))
-        val spacer=View(this); brand.addView(mark); brand.addView(nameCol); brand.addView(spacer,LinearLayout.LayoutParams(0,1,1f))
-        privacyBadge = label("•  SHIELDS ON",10f,accent,true).apply {
-            setPadding(dp(10),dp(8),dp(10),dp(8)); background=shape(panel,18); contentDescription="Open site protection settings"; isFocusable=true; isClickable=true
+        val nameCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(10), 0, 0, 0) }
+        nameCol.addView(label("ASTER", 13f, ink, true))
+        nameCol.addView(label(if (wideBrowserShell) "GECKOVIEW · PRIVATE BY DEFAULT" else "PRIVATE BY DEFAULT", 9f, muted, false))
+        val spacer = View(this)
+        brand.addView(mark)
+        brand.addView(nameCol)
+        brand.addView(spacer, LinearLayout.LayoutParams(0, 1, 1f))
+        privacyBadge = label("✦  SHIELDS ON", 10f, accent, true).apply {
+            setPadding(dp(12), dp(9), dp(12), dp(9))
+            background = shape(raised, 16)
+            contentDescription = "Open site protection settings"
+            isFocusable = true
+            isClickable = true
+            pressFeedback(this)
             setOnClickListener { showSiteShields() }
         }
-        brand.addView(privacyBadge); top.addView(brand)
+        brand.addView(privacyBadge)
+        top.addView(brand)
+
         address = EditText(this).apply {
-            setSingleLine(true); textSize=14f; setTextColor(ink); setHintTextColor(muted); hint="Search or enter address"; setPadding(dp(14),0,dp(12),0)
-            background=shape(panel,16); imeOptions=EditorInfo.IME_ACTION_GO; inputType=android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+            setSingleLine(true)
+            textSize = if (wideBrowserShell) 15f else 14f
+            setTextColor(ink)
+            setHintTextColor(muted)
+            hint = "Search or enter address"
+            setPadding(dp(16), 0, dp(12), 0)
+            background = shape(dark, 16)
+            imeOptions = EditorInfo.IME_ACTION_GO
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
             setOnFocusChangeListener { view, focused ->
-                val field = shape(panel, 16)
-                field.setStroke(dp(1), if (focused) accent else raised)
+                val field = shape(dark, 16)
+                field.setStroke(dp(if (focused) 1 else 0), if (focused) accent else raised)
                 view.background = field
+                if (focused) view.animate().translationZ(dp(2).toFloat()).setDuration(motionDuration(150L)).start()
+                else view.animate().translationZ(0f).setDuration(motionDuration(150L)).start()
             }
-            setOnEditorActionListener { _, action, event -> if(action==EditorInfo.IME_ACTION_GO || event?.keyCode==KeyEvent.KEYCODE_ENTER){navigate(text.toString()); true}else false }
-            contentDescription="Search or enter address"
+            setOnEditorActionListener { _, action, event ->
+                if (action == EditorInfo.IME_ACTION_GO || event?.keyCode == KeyEvent.KEYCODE_ENTER) { navigate(text.toString()); true } else false
+            }
+            contentDescription = "Search or enter address"
         }
-        addressRow=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; setPadding(0,dp(12),0,dp(2)) }
-        addressRow.addView(address,LinearLayout.LayoutParams(0,dp(48),1f))
-        val reload=iconButton(R.drawable.ic_refresh, "Reload page", 48, 48, 0f) { current()?.session?.reload() }
-        addressRow.addView(reload,LinearLayout.LayoutParams(dp(44),dp(48))); top.addView(addressRow)
+        addressRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(if (wideBrowserShell) dp(5) else 0, dp(if (wideBrowserShell) 12 else 10), if (wideBrowserShell) dp(5) else 0, 0)
+        }
+        if (wideBrowserShell) {
+            addressRow.addView(iconButton(R.drawable.ic_back, "Go back", 42, 46, 0f) { current()?.session?.goBack() })
+            addressRow.addView(iconButton(R.drawable.ic_forward, "Go forward", 42, 46, 0f) { current()?.session?.goForward() })
+            addressRow.addView(iconButton(R.drawable.ic_home, "Open home", 42, 46, 0f) { navigate(homeUrl) })
+        }
+        addressRow.addView(address, LinearLayout.LayoutParams(0, dp(48), 1f))
+        addressRow.addView(iconButton(R.drawable.ic_refresh, "Reload page", 44, 46, 0f) { current()?.session?.reload() })
+        if (wideBrowserShell) {
+            addressRow.addView(iconButton(R.drawable.ic_tabs, "Show tabs", 44, 46, 0f) { showTabs() })
+            addressRow.addView(iconButton(R.drawable.ic_more, "Settings and more", 44, 46, 0f) { showMenu() })
+        }
+        top.addView(addressRow)
+
         val topFrame = FrameLayout(this)
-        val topWidth = if (resources.configuration.screenWidthDp > 984) dp(960) else -1
+        val topWidth = if (wideBrowserShell && resources.configuration.screenWidthDp > 1420) dp(1360) else -1
         topFrame.addView(top, FrameLayout.LayoutParams(topWidth, -2, Gravity.CENTER_HORIZONTAL))
-        root.addView(topFrame, LinearLayout.LayoutParams(-1, -2))
-        pageHost=FrameLayout(this).apply { setBackgroundColor(dark) }
-        gecko=GeckoView(this)
-        gecko.setBackgroundColor(dark)
-        pageHost.addView(gecko,FrameLayout.LayoutParams(-1,-1))
-        root.addView(pageHost,LinearLayout.LayoutParams(-1,0,1f))
-        val nav=LinearLayout(this).apply { gravity=Gravity.CENTER; orientation=LinearLayout.HORIZONTAL; setPadding(dp(6),dp(4),dp(6),dp(4)); setBackgroundColor(panel) }
-        nav.addView(navAction(R.drawable.ic_back, "Back", "Go back") { current()?.session?.goBack() })
-        nav.addView(navAction(R.drawable.ic_forward, "Forward", "Go forward") { current()?.session?.goForward() })
-        nav.addView(navAction(R.drawable.ic_home, "Home", "Home") { navigate(homeUrl) })
-        nav.addView(navAction(R.drawable.ic_tabs, "Tabs", "Tabs") { showTabs() })
-        nav.addView(navAction(R.drawable.ic_more, "More", "Settings and more") { showMenu() })
-        val navFrame = FrameLayout(this)
-        val navWidth = if (resources.configuration.screenWidthDp > 544) dp(520) else -1
-        navFrame.addView(nav, FrameLayout.LayoutParams(navWidth, dp(66), Gravity.CENTER))
-        root.addView(navFrame,LinearLayout.LayoutParams(-1,dp(66)))
+        root.addView(topFrame, LinearLayout.LayoutParams(-1, -2).apply {
+            if (wideBrowserShell) { leftMargin = dp(16); rightMargin = dp(16); topMargin = dp(10) }
+            else { leftMargin = dp(10); rightMargin = dp(10); topMargin = dp(7) }
+        })
+
+        if (wideBrowserShell) {
+            val tabsHost = buildTabletTabsHost()
+            tabletTabsHost = tabsHost
+            root.addView(tabsHost, LinearLayout.LayoutParams(-1, dp(54)).apply {
+                leftMargin = dp(22); rightMargin = dp(22); topMargin = dp(7); bottomMargin = dp(2)
+            })
+        }
+
+        pageHost = FrameLayout(this).apply {
+            setBackgroundColor(dark)
+            if (wideBrowserShell) {
+                background = shape(panel, 20)
+                clipToOutline = true
+            }
+        }
+        gecko = GeckoView(this).apply { setBackgroundColor(dark) }
+        pageHost.addView(gecko, FrameLayout.LayoutParams(-1, -1))
+        root.addView(pageHost, LinearLayout.LayoutParams(-1, 0, 1f).apply {
+            if (wideBrowserShell) { leftMargin = dp(18); rightMargin = dp(18); topMargin = dp(6); bottomMargin = dp(3) }
+        })
+
+        if (wideBrowserShell) {
+            val footer = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(24), dp(3), dp(24), dp(3)) }
+            footer.addView(label("ASTER  /  GECKOVIEW", 9f, muted, true))
+            val fill = View(this)
+            footer.addView(fill, LinearLayout.LayoutParams(0, 1, 1f))
+            tabletEngineStatus = label("Private by default", 9f, muted, false)
+            footer.addView(tabletEngineStatus)
+            root.addView(footer, LinearLayout.LayoutParams(-1, dp(26)))
+        } else {
+            val nav = LinearLayout(this).apply {
+                gravity = Gravity.CENTER
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(dp(6), dp(3), dp(6), dp(3))
+                background = shape(panel, 22)
+                elevation = dp(5).toFloat()
+            }
+            nav.addView(navAction(R.drawable.ic_back, "Back", "Go back") { current()?.session?.goBack() })
+            nav.addView(navAction(R.drawable.ic_forward, "Forward", "Go forward") { current()?.session?.goForward() })
+            nav.addView(navAction(R.drawable.ic_home, "Home", "Home") { navigate(homeUrl) })
+            nav.addView(navAction(R.drawable.ic_tabs, "Tabs", "Tabs") { showTabs() })
+            nav.addView(navAction(R.drawable.ic_more, "More", "Settings and more") { showMenu() })
+            val navFrame = FrameLayout(this)
+            navFrame.addView(nav, FrameLayout.LayoutParams(-1, dp(62), Gravity.CENTER))
+            root.addView(navFrame, LinearLayout.LayoutParams(-1, dp(70)).apply {
+                leftMargin = dp(12); rightMargin = dp(12); topMargin = dp(2); bottomMargin = dp(7)
+            })
+        }
         setContentView(root)
         ViewCompat.requestApplyInsets(root)
+        top.alpha = 0f
+        top.translationY = dp(-5).toFloat()
+        top.animate().alpha(1f).translationY(0f).setDuration(motionDuration(220L))
+            .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+        if (wideBrowserShell) updateTabletTabStrip()
+    }
+
+    private fun buildTabletTabsHost(): View {
+        val host = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val scroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; overScrollMode = View.OVER_SCROLL_NEVER }
+        tabletTabsRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        scroll.addView(tabletTabsRow, ViewGroup.LayoutParams(-2, -1))
+        host.addView(scroll, LinearLayout.LayoutParams(0, -1, 1f))
+        val plus = TextView(this).apply {
+            text = "+"; textSize = 24f; gravity = Gravity.CENTER; setTextColor(accent)
+            background = shape(raised, 15); contentDescription = "Open a new tab"; isFocusable = true; isClickable = true
+            pressFeedback(this)
+            setOnClickListener { showBrowser(); createTab(homeUrl) }
+        }
+        host.addView(plus, LinearLayout.LayoutParams(dp(42), dp(40)).apply { leftMargin = dp(7) })
+        return host
+    }
+
+    private fun updateTabletTabStrip() {
+        val row = tabletTabsRow ?: return
+        row.removeAllViews()
+        tabs.forEach { tab ->
+            val selected = tab.id == activeId
+            val chip = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(12), 0, dp(6), 0)
+                background = shape(if (selected) raised else panel, 14)
+                isFocusable = true; isClickable = true
+                pressFeedback(this)
+                setOnClickListener { selectTab(tab.id); showBrowser() }
+            }
+            val dot = View(this).apply { background = shape(if (selected) accent else muted, 4) }
+            chip.addView(dot, LinearLayout.LayoutParams(dp(7), dp(7)).apply { rightMargin = dp(8) })
+            val title = label(tab.title.ifBlank { "New tab" }, 12f, if (selected) ink else muted, selected).apply {
+                maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+            }
+            chip.addView(title, LinearLayout.LayoutParams(0, -2, 1f))
+            val close = TextView(this).apply {
+                text = "×"; textSize = 17f; gravity = Gravity.CENTER; setTextColor(muted)
+                contentDescription = "Close ${tab.title.ifBlank { "tab" }}"; isFocusable = true
+                background = selectableBackground(); setPadding(dp(5), 0, dp(4), 0)
+                setOnClickListener { closeTab(tab.id) }
+            }
+            chip.addView(close, LinearLayout.LayoutParams(dp(28), dp(34)).apply { leftMargin = dp(4) })
+            row.addView(chip, LinearLayout.LayoutParams(dp(204), dp(40)).apply { rightMargin = dp(7) })
+        }
+        tabletEngineStatus?.text = current()?.let { tab ->
+            when {
+                tab.privateMode -> "Private tab"
+                tab.url.startsWith("http") -> Uri.parse(tab.url).host ?: "Private by default"
+                else -> "Private by default"
+            }
+        } ?: "Private by default"
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        val wasWide = wideBrowserShell
+        super.onConfigurationChanged(newConfig)
+        val isWide = newConfig.screenWidthDp >= 760
+        if (wasWide != isWide) {
+            val previousScreen = screen
+            buildShell()
+            selectTab(activeId)
+            when (previousScreen) {
+                "settings" -> showSettings()
+                "privacy" -> showPrivacyDashboard()
+                "ai" -> showLocalAi()
+                "extensions" -> showExtensions()
+                else -> showBrowser()
+            }
+        }
     }
 
     private fun button(glyph:String, description:String, action:()->Unit): TextView = button(glyph,description).apply { pressFeedback(this); setOnClickListener { action() } }
@@ -474,6 +651,22 @@ class MainActivity : Activity() {
         heading.addView(label("Your browser", 22f, ink, true))
         heading.addView(label("Tools for this tab", 12f, muted, false).apply { setPadding(0, dp(3), 0, 0) })
         content.addView(heading)
+        val quickActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        fun quickAction(icon: Int, title: String, description: String, action: () -> Unit): View = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(8), dp(8), dp(8), dp(8))
+            background = shape(raised, 15); isFocusable = true; isClickable = true; pressFeedback(this)
+            addView(ImageView(this@MainActivity).apply {
+                setImageResource(icon); imageTintList = android.content.res.ColorStateList.valueOf(accent)
+                contentDescription = description
+            }, LinearLayout.LayoutParams(dp(21), dp(21)))
+            addView(label(title, 10f, ink, true).apply { gravity = Gravity.CENTER; setPadding(0, dp(4), 0, 0) })
+            setOnClickListener { dialog.dismiss(); action() }
+        }
+        quickActions.addView(quickAction(R.drawable.ic_tabs, "New tab", "Open a new tab") { showBrowser(); createTab(homeUrl) }, LinearLayout.LayoutParams(0, dp(64), 1f).apply { rightMargin = dp(7) })
+        quickActions.addView(quickAction(R.drawable.ic_private, "Private", "Open a private tab") { createTab(homeUrl, privateMode = true) }, LinearLayout.LayoutParams(0, dp(64), 1f).apply { rightMargin = dp(7) })
+        quickActions.addView(quickAction(R.drawable.ic_private, "Tor", "Connect and open a Tor private window") { showTorSetup() }, LinearLayout.LayoutParams(0, dp(64), 1f))
+        content.addView(quickActions, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
+        content.addView(label("YOUR BROWSER", 9f, muted, true).apply { letterSpacing = 0.13f; setPadding(dp(2), 0, 0, dp(6)) })
         content.addView(menuRow(R.drawable.ic_bookmark, "Add bookmark", "Save this page") { dialog.dismiss(); bookmarkCurrent() })
         content.addView(menuRow(R.drawable.ic_bookmarks, "Bookmarks", "Your saved pages") { dialog.dismiss(); showBookmarks() })
         content.addView(menuRow(R.drawable.ic_history, "History", "Recently visited") { dialog.dismiss(); showHistory() })
@@ -481,6 +674,7 @@ class MainActivity : Activity() {
         content.addView(menuRow(R.drawable.ic_private, "New Tor private window", "Route this separate window through Tor") { dialog.dismiss(); showTorSetup() })
         content.addView(menuRow(R.drawable.ic_chart, "Privacy dashboard", "Protection activity · last 7 days") { dialog.dismiss(); showPrivacyDashboard() })
         content.addView(menuRow(R.drawable.ic_ai, "On-device AI", "Private local chat · no account needed") { dialog.dismiss(); showLocalAi() })
+        content.addView(menuRow(R.drawable.ic_feedback, "Prepare issue report", "Choose safe diagnostics and screenshot") { dialog.dismiss(); beginIssueReport() })
         content.addView(menuRow(R.drawable.ic_shred, "Shred this website", "Clear this site's saved data") { dialog.dismiss(); confirmShredCurrentSite() })
         content.addView(menuRow(R.drawable.ic_feedback, "Request a feature", "Draft a request for Aster") { dialog.dismiss(); showFeatureRequest() })
         content.addView(menuRow(R.drawable.ic_download, "Downloads", "Download handling · planned") { dialog.dismiss(); message("Downloads", "Download management is planned for a future version.") })
@@ -489,8 +683,8 @@ class MainActivity : Activity() {
         val divider = View(this).apply { setBackgroundColor(raised) }
         val dividerLp = LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(8); bottomMargin = dp(8) }
         content.addView(divider, dividerLp)
-        content.addView(menuRow(R.drawable.ic_share, "Send to PC", "In development · not active yet", enabled = false) {
-            dialog.dismiss(); message("Coming later", "Send tabs and bookmarks to your PC is planned. This control is not active yet.")
+        content.addView(menuRow(R.drawable.ic_share, "Send tabs and bookmarks", "Choose Quick Share or another nearby device") {
+            dialog.dismiss(); shareTabsAndBookmarks()
         })
         val menuScroll = ScrollView(this).apply { isFillViewport = true; addView(content) }
         dialog.setView(menuScroll)
@@ -581,7 +775,7 @@ class MainActivity : Activity() {
         section(content,"SUPPORT")
         row(content,"Request a feature","Draft a GitHub request","Open form") { showFeatureRequest() }
         section(content,"SYNC")
-        row(content,"Send to PC","In development","Preview") { message("Coming later","Cross-device sharing is planned for a future version. No data is sent from this build.") }
+        row(content,"Share tabs and bookmarks","Use Android sharing or Quick Share","Share now") { shareTabsAndBookmarks() }
         val close=button("Done","Close settings") { showBrowser() }.apply { text="Done"; textSize=15f; setTypeface(null,Typeface.BOLD); background=shape(accent,15); setTextColor(dark); layoutParams=LinearLayout.LayoutParams(-1,dp(48)); setOnClickListener { showBrowser() } }
         content.addView(close)
         val settingsScroll = ScrollView(this).apply { isFillViewport = true }
@@ -592,7 +786,7 @@ class MainActivity : Activity() {
         settingsScroll.alpha = 0f; settingsScroll.translationY = dp(8).toFloat()
         pageHost.removeAllViews(); pageHost.addView(settingsScroll, FrameLayout.LayoutParams(-1, -1))
         settingsScroll.animate().alpha(1f).translationY(0f).setDuration(motionDuration(245L)).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
-        screen="settings"; addressRow.visibility=View.GONE; privacyBadge.text="✦  ASTER SETTINGS"
+        screen="settings"; addressRow.visibility=View.GONE; tabletTabsHost?.visibility = View.GONE; privacyBadge.text="✦  ASTER SETTINGS"
     }
 
     private fun showPrivacyDashboard() {
@@ -632,6 +826,7 @@ class MainActivity : Activity() {
         pageHost.addView(scroll, FrameLayout.LayoutParams(-1, -1))
         screen = "privacy"
         addressRow.visibility = View.GONE
+        tabletTabsHost?.visibility = View.GONE
         privacyBadge.text = "✦  PRIVACY"
     }
 
@@ -937,6 +1132,348 @@ class MainActivity : Activity() {
         dialog.styleDialog()
     }
 
+    /** Start a local, opt-in report flow. No logs, cookies, storage, or full page URL are collected. */
+    private fun beginIssueReport(
+        engineName: String = "GeckoView",
+        sourceHost: String? = null,
+        sourceScreenshot: ByteArray? = null
+    ) {
+        val tab = current()
+        val privateTab = engineName == "GeckoView" && tab?.privateMode == true
+        val origin = sourceHost?.let(::safeIssueOrigin)
+            ?: if (engineName == "GeckoView" && !privateTab) safeIssueOrigin(tab?.url) else null
+        if (sourceScreenshot != null) {
+            val bitmap = runCatching { BitmapFactory.decodeByteArray(sourceScreenshot, 0, sourceScreenshot.size) }.getOrNull()
+            val capture = bitmap?.let {
+                IssueCapture(it, Rect(0, 0, it.width, (it.height * 0.17f).toInt()), Rect(0, (it.height * 0.17f).toInt(), it.width, it.height))
+            }
+            showIssueReportChoices(engineName, origin, privateTab, capture, screenshotUnavailable = capture == null)
+            return
+        }
+        if (engineName != "GeckoView") {
+            showIssueReportChoices(engineName, origin, privateTab, null, screenshotUnavailable = true)
+            return
+        }
+
+        val decor = window.decorView
+        val width = decor.width
+        val height = decor.height
+        if (width <= 0 || height <= 0) {
+            showIssueReportChoices(engineName, origin, privateTab, null, screenshotUnavailable = true)
+            return
+        }
+        val bitmap = runCatching { Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888) }.getOrNull()
+        if (bitmap == null) {
+            showIssueReportChoices(engineName, origin, privateTab, null, screenshotUnavailable = true)
+            return
+        }
+        val addressRect = viewWindowRect(addressRow)
+        val pageRect = viewWindowRect(pageHost)
+        runCatching {
+            PixelCopy.request(window, bitmap, { result ->
+                val capture = if (result == PixelCopy.SUCCESS) IssueCapture(bitmap, addressRect, pageRect) else null
+                if (capture == null) bitmap.recycle()
+                showIssueReportChoices(engineName, origin, privateTab, capture, screenshotUnavailable = capture == null)
+            }, Handler(Looper.getMainLooper()))
+        }.onFailure {
+            bitmap.recycle()
+            showIssueReportChoices(engineName, origin, privateTab, null, screenshotUnavailable = true)
+        }
+    }
+
+    private fun viewWindowRect(view: View?): Rect? {
+        if (view == null || view.width <= 0 || view.height <= 0) return null
+        val location = IntArray(2)
+        view.getLocationInWindow(location)
+        return Rect(location[0], location[1], location[0] + view.width, location[1] + view.height)
+    }
+
+    private fun showIssueReportChoices(
+        engineName: String,
+        origin: String?,
+        privateTab: Boolean,
+        capture: IssueCapture?,
+        screenshotUnavailable: Boolean
+    ) {
+        val dialog = AlertDialog.Builder(this).create()
+        dialog.setOnDismissListener { if (capture?.bitmap?.isRecycled == false) capture.bitmap.recycle() }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(14), dp(20), dp(14))
+            background = shape(panel, 26)
+        }
+        content.addView(label("Prepare a GitHub issue", 21f, ink, true))
+        content.addView(label("Review every item before opening the draft. Aster never attaches browser logs or stored site data.", 12f, muted, false).apply {
+            setPadding(0, dp(5), 0, dp(13))
+        })
+
+        fun option(title: String, note: String, checked: Boolean): CheckBox {
+            val box = CheckBox(this).apply {
+                text = "$title\n$note"
+                textSize = 12f
+                setTextColor(ink)
+                buttonTintList = android.content.res.ColorStateList.valueOf(accent)
+                isChecked = checked
+                setPadding(dp(4), dp(4), dp(4), dp(4))
+                background = selectableBackground()
+                minHeight = dp(54)
+            }
+            content.addView(box, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) })
+            return box
+        }
+
+        val includeApp = option("App and engine", "Aster version and active engine", true)
+        val includeDevice = option("Android and screen", "Android release and display size", true)
+        val includeSite = option("Website origin", if (privateTab) "Off for this private tab" else "Host only · no path or search text", !privateTab && !origin.isNullOrBlank())
+        val includeScreenshot = option("Screenshot", if (screenshotUnavailable) "Unavailable from this engine or screen" else "Address field is always covered", capture != null)
+        includeScreenshot.isEnabled = capture != null
+        val includePage = option("Show website pixels", "May reveal account names, messages, or other page content", false)
+        includePage.isEnabled = capture != null
+        includePage.setOnCheckedChangeListener { _, enabled ->
+            includeScreenshot.isChecked = includeScreenshot.isChecked || enabled
+        }
+
+        val issueTitle = EditText(this).apply {
+            setSingleLine(true); textSize = 14f; setTextColor(ink); setHintTextColor(muted)
+            hint = "Short issue title"
+            val host = origin?.substringAfter("://")
+            setText(if (host?.contains("instagram.com", true) == true) "Instagram Reels playback issue in Aster" else "Browser issue${host?.let { " on $it" } ?: ""}")
+            setPadding(dp(13), dp(10), dp(13), dp(10)); background = shape(raised, 13)
+            filters = arrayOf(android.text.InputFilter.LengthFilter(100))
+        }
+        val details = EditText(this).apply {
+            minLines = 3; maxLines = 5; textSize = 13f; setTextColor(ink); setHintTextColor(muted)
+            hint = "What happened? What did you expect instead?"
+            setPadding(dp(13), dp(10), dp(13), dp(10)); background = shape(raised, 13)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            filters = arrayOf(android.text.InputFilter.LengthFilter(1800))
+        }
+        content.addView(issueTitle, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(9) })
+        content.addView(details, LinearLayout.LayoutParams(-1, dp(112)).apply { topMargin = dp(8) })
+        val warning = label("Only the data you select is prepared. Website pixels stay hidden in the screenshot until you turn them on and review the preview.", 11f, muted, false)
+        content.addView(warning, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
+
+        val scroll = ScrollView(this).apply { isFillViewport = true; addView(content) }
+        dialog.setView(scroll)
+        dialog.setButton(AlertDialog.BUTTON_POSITIVE, "Review report", null as android.content.DialogInterface.OnClickListener?)
+        dialog.setButton(AlertDialog.BUTTON_NEGATIVE, "Cancel", null as android.content.DialogInterface.OnClickListener?)
+        dialog.show()
+        dialog.window?.setLayout(if (resources.configuration.screenWidthDp >= 700) dp(560) else -1, minOf(dp(720), (resources.displayMetrics.heightPixels * 0.88f).toInt()))
+        dialog.styleDialog()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val cleanTitle = sanitizeIssueText(issueTitle.text.toString()).trim().take(100)
+            val cleanDetails = sanitizeIssueText(details.text.toString()).trim().take(1800)
+            if (cleanTitle.isBlank() || cleanDetails.isBlank()) {
+                message("Add a short description", "Describe the problem before preparing the GitHub draft.")
+                return@setOnClickListener
+            }
+            val safeShot = if (includeScreenshot.isChecked) capture?.let { makeIssueScreenshot(it, includePage.isChecked) } else null
+            if (includeScreenshot.isChecked && safeShot == null) {
+                message("Screenshot unavailable", "Aster could not capture this screen. You can continue with the selected text diagnostics.")
+                includeScreenshot.isChecked = false
+            }
+            dialog.dismiss()
+            showIssueReportReview(
+                cleanTitle,
+                cleanDetails,
+                engineName,
+                origin.takeIf { includeSite.isChecked },
+                includeApp.isChecked,
+                includeDevice.isChecked,
+                safeShot,
+                includePage.isChecked
+            )
+        }
+    }
+
+    private fun makeIssueScreenshot(capture: IssueCapture, includePagePixels: Boolean): Bitmap? = runCatching {
+        val output = capture.bitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(output)
+        val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xff121719.toInt() }
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = dp(13).toFloat()
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        fun mask(rect: Rect?, text: String) {
+            if (rect == null) return
+            val safe = Rect(rect.left.coerceIn(0, output.width), rect.top.coerceIn(0, output.height), rect.right.coerceIn(0, output.width), rect.bottom.coerceIn(0, output.height))
+            if (safe.width() <= 0 || safe.height() <= 0) return
+            canvas.drawRect(safe, maskPaint)
+            canvas.drawText(text, safe.left + dp(14).toFloat(), safe.centerY() + dp(4).toFloat(), textPaint)
+        }
+        mask(capture.addressRect, "Address hidden for privacy")
+        if (!includePagePixels) mask(capture.pageRect, "Website pixels hidden")
+        output
+    }.getOrNull()
+
+    private fun showIssueReportReview(
+        title: String,
+        details: String,
+        engineName: String,
+        origin: String?,
+        includeApp: Boolean,
+        includeDevice: Boolean,
+        screenshot: Bitmap?,
+        includesPagePixels: Boolean
+    ) {
+        val dialog = AlertDialog.Builder(this).create()
+        var savingReport = false
+        dialog.setOnDismissListener { if (!savingReport && screenshot?.isRecycled == false) screenshot.recycle() }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(12), dp(20), dp(12))
+            background = shape(panel, 24)
+        }
+        content.addView(label(title, 18f, ink, true))
+        content.addView(label("GitHub issue draft · review before opening", 11f, muted, false).apply { setPadding(0, dp(3), 0, dp(10)) })
+        if (screenshot != null) {
+            content.addView(ImageView(this).apply {
+                setImageBitmap(screenshot)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                adjustViewBounds = true
+                maxHeight = dp(310)
+                background = shape(raised, 16)
+                clipToOutline = true
+                contentDescription = "Preview of the privacy-reviewed issue screenshot"
+            }, LinearLayout.LayoutParams(-1, dp(250)).apply { bottomMargin = dp(10) })
+        }
+        if (includesPagePixels) content.addView(label("Website pixels are visible in this image. Check the preview for private information before continuing.", 11f, 0xffffc47d.toInt(), true).apply { setPadding(0, 0, 0, dp(9)) })
+        val previewText = TextView(this).apply {
+            text = buildIssueBody(details, engineName, origin, includeApp, includeDevice, screenshot != null, includesPagePixels, null)
+            textSize = 12f; setTextColor(muted); setTextIsSelectable(true); setPadding(dp(12), dp(10), dp(12), dp(10)); background = shape(raised, 14)
+        }
+        content.addView(ScrollView(this).apply { addView(previewText) }, LinearLayout.LayoutParams(-1, dp(210)))
+        val safeShotReviewed = CheckBox(this).apply {
+            text = "I reviewed the visible website pixels"
+            textSize = 12f; setTextColor(ink); buttonTintList = android.content.res.ColorStateList.valueOf(accent)
+            visibility = if (includesPagePixels && screenshot != null) View.VISIBLE else View.GONE
+        }
+        if (safeShotReviewed.visibility == View.VISIBLE) content.addView(safeShotReviewed)
+        val note = label("The screenshot and report are saved in Downloads/Aster issue reports. GitHub opens a draft; Aster does not submit it.", 11f, muted, false)
+        content.addView(note, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        dialog.setView(ScrollView(this).apply { addView(content) })
+        dialog.setButton(AlertDialog.BUTTON_POSITIVE, "Save & open GitHub", null as android.content.DialogInterface.OnClickListener?)
+        dialog.setButton(AlertDialog.BUTTON_NEGATIVE, "Back", null as android.content.DialogInterface.OnClickListener?)
+        dialog.show()
+        dialog.window?.setLayout(if (resources.configuration.screenWidthDp >= 700) dp(580) else -1, minOf(dp(760), (resources.displayMetrics.heightPixels * 0.9f).toInt()))
+        dialog.styleDialog()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = !includesPagePixels || screenshot == null
+        safeShotReviewed.setOnCheckedChangeListener { _, checked -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = checked }
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            savingReport = true
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).text = "Saving report…"
+            Thread {
+                runCatching {
+                    val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US).format(java.util.Date())
+                    val base = "aster-issue-$stamp"
+                    val screenshotName = if (screenshot != null) "$base.png" else null
+                    val screenshotPath = if (screenshot != null && screenshotName != null) {
+                        saveIssueDownload(screenshotName, "image/png") { out ->
+                            if (!screenshot.compress(Bitmap.CompressFormat.PNG, 100, out)) error("Could not encode screenshot")
+                        } ?: error("Could not save screenshot")
+                        "Downloads/Aster issue reports/$screenshotName"
+                    } else null
+                    val report = buildIssueBody(details, engineName, origin, includeApp, includeDevice, screenshot != null, includesPagePixels, screenshotPath)
+                    val reportName = "$base.md"
+                    saveIssueDownload(reportName, "text/markdown") { out -> out.write(report.toByteArray(Charsets.UTF_8)) }
+                        ?: error("Could not save the report")
+                    runOnUiThread {
+                        dialog.dismiss()
+                        screenshot?.recycle()
+                        val issueUri = Uri.parse("https://github.com/B1progame/aster-browser/issues/new")
+                            .buildUpon().appendQueryParameter("title", title).appendQueryParameter("body", report).build()
+                        createTab(issueUri.toString())
+                        Toast.makeText(this, "Draft ready · report saved in Downloads/Aster issue reports", Toast.LENGTH_LONG).show()
+                    }
+                }.onFailure { error ->
+                    runOnUiThread {
+                        savingReport = false
+                        dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true
+                        dialog.getButton(AlertDialog.BUTTON_POSITIVE).text = "Save & open GitHub"
+                        message("Could not prepare the report", error.message ?: "Android could not save the selected report files.")
+                    }
+                }
+            }.start()
+        }
+    }
+
+    private fun buildIssueBody(
+        details: String,
+        engineName: String,
+        origin: String?,
+        includeApp: Boolean,
+        includeDevice: Boolean,
+        hasScreenshot: Boolean,
+        includesPagePixels: Boolean,
+        screenshotPath: String?
+    ): String = buildString {
+        appendLine("## What happened")
+        appendLine(details)
+        appendLine()
+        appendLine("## Diagnostics")
+        if (includeApp) {
+            appendLine("- Engine: ${sanitizeIssueText(engineName)}")
+            appendLine("- Aster version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+        }
+        if (includeDevice) {
+            val display = resources.displayMetrics
+            appendLine("- Android: ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})")
+            appendLine("- Device: ${sanitizeIssueText(android.os.Build.MANUFACTURER)} ${sanitizeIssueText(android.os.Build.MODEL)}")
+            appendLine("- Display: ${display.widthPixels} × ${display.heightPixels} px; ${resources.configuration.screenWidthDp} × ${resources.configuration.screenHeightDp} dp")
+        }
+        if (origin != null) appendLine("- Website origin: $origin")
+        if (hasScreenshot) {
+            appendLine("- Screenshot: ${screenshotPath?.let { "attach `$it` from Downloads/Aster issue reports" } ?: "prepared for Downloads/Aster issue reports"}")
+            appendLine("- Website pixels: ${if (includesPagePixels) "visible; reviewed in Aster" else "masked"}")
+        }
+        appendLine()
+        appendLine("## Privacy")
+        appendLine("Aster did not include cookies, passwords, browsing history, full URL paths, query strings, or browser logs.")
+        if (hasScreenshot) appendLine("Website pixels are ${if (includesPagePixels) "visible in the reviewed screenshot" else "covered in the screenshot"}.")
+    }.trim().take(6000)
+
+    private fun safeIssueOrigin(raw: String?): String? = runCatching {
+        val input = raw?.take(4096).orEmpty()
+        val uri = Uri.parse(if (input.contains("://")) input else "https://$input")
+        val scheme = uri.scheme?.lowercase(java.util.Locale.ROOT)
+        val host = uri.host?.lowercase(java.util.Locale.ROOT)
+        if (scheme !in setOf("http", "https") || host.isNullOrBlank()) null
+        else Uri.Builder().scheme(scheme).encodedAuthority(host + if (uri.port >= 0) ":${uri.port}" else "").build().toString()
+    }.getOrNull()
+
+    private fun sanitizeIssueText(raw: String): String {
+        var text = raw.take(2400)
+        text = Regex("(?i)\\b(bearer\\s+)[a-z0-9._~+/=-]{8,}").replace(text, "$1[redacted]")
+        text = Regex("(?i)\\b(password|passwd|token|secret|api[_-]?key|authorization)(\\s*[:=]\\s*)[^\\s,;]+")
+            .replace(text) { "${it.groupValues[1]}${it.groupValues[2]}[redacted]" }
+        text = Regex("(?i)https?://[^\\s<>]+\\b").replace(text) { match ->
+            val safe = safeIssueOrigin(match.value.trimEnd('.', ',', ')', ']', ';'))
+            safe?.plus("/[path hidden]") ?: "[URL hidden]"
+        }
+        return Regex("[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}", RegexOption.IGNORE_CASE).replace(text, "[email hidden]")
+    }
+
+    private fun saveIssueDownload(name: String, mimeType: String, write: (java.io.OutputStream) -> Unit): Uri? {
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Aster issue reports")
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return null
+        return try {
+            contentResolver.openOutputStream(uri, "w")?.use(write) ?: error("Could not open report file")
+            val ready = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
+            contentResolver.update(uri, ready, null, null)
+            uri
+        } catch (error: Throwable) {
+            contentResolver.delete(uri, null, null)
+            throw error
+        }
+    }
+
     private fun showAppUpdateDialog() {
         val status = label("Check GitHub for the latest GeckoView build. Android will ask before installing an APK.", 14f, muted, false)
         val content = LinearLayout(this).apply {
@@ -960,31 +1497,142 @@ class MainActivity : Activity() {
     }
 
     private fun showTorSetup() {
-        AlertDialog.Builder(this)
-            .setTitle("Open a Tor private window?")
-            .setMessage("Aster starts its bundled Tor service and opens a separate Gecko profile through Tor's SOCKS proxy. The session is private and its temporary profile is removed when closed. Tor must finish connecting before the window opens.")
-            .setNegativeButton("Close", null)
-            .setPositiveButton("Connect to Tor") { _, _ -> startTorPrivateWindow() }
-            .show().styleDialog()
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(4), dp(22), dp(12))
+            background = shape(panel, 22)
+        }
+        val icon = ImageView(this).apply {
+            setImageResource(R.drawable.ic_private)
+            imageTintList = android.content.res.ColorStateList.valueOf(accent)
+            background = shape(raised, 20)
+            setPadding(dp(17), dp(17), dp(17), dp(17))
+            contentDescription = "Tor private browsing"
+        }
+        content.addView(icon, LinearLayout.LayoutParams(dp(62), dp(62)).apply { bottomMargin = dp(12) })
+        content.addView(label("A separate private route", 17f, ink, true))
+        content.addView(label("Aster connects to Tor, waits for a circuit, then opens a temporary Gecko profile. Your regular tabs remain available.", 13f, muted, false).apply {
+            setPadding(0, dp(5), 0, 0)
+        })
+        val dialog = AlertDialog.Builder(this).create()
+        dialog.setView(content)
+        dialog.setButton(AlertDialog.BUTTON_NEGATIVE, "Not now", null as android.content.DialogInterface.OnClickListener?)
+        dialog.setButton(AlertDialog.BUTTON_POSITIVE, "Connect", null as android.content.DialogInterface.OnClickListener?)
+        dialog.show()
+        dialog.window?.setLayout(if (resources.configuration.screenWidthDp >= 700) dp(500) else -1, -2)
+        dialog.styleDialog()
+        content.alpha = 0f; content.translationY = dp(8).toFloat()
+        content.animate().alpha(1f).translationY(0f).setDuration(motionDuration(210L))
+            .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).apply {
+            setTextColor(dark); background = shape(accent, 14)
+            setOnClickListener { dialog.dismiss(); startTorPrivateWindow() }
+        }
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener { dialog.dismiss() }
+    }
+
+    private inner class TorCircuitView : View(this@MainActivity) {
+        private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = dp(2).toFloat() }
+        private val node = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val center = Paint(Paint.ANTI_ALIAS_FLAG)
+        private var angle = 0f
+        private val motion = ValueAnimator.ofFloat(0f, 360f).apply {
+            duration = 2100L
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = android.view.animation.LinearInterpolator()
+            addUpdateListener { angle = it.animatedValue as Float; invalidate() }
+        }
+
+        init { contentDescription = "Tor is building an encrypted connection route" }
+
+        override fun onAttachedToWindow() {
+            super.onAttachedToWindow()
+            if (ValueAnimator.areAnimatorsEnabled() && !motion.isStarted) motion.start()
+        }
+
+        override fun onDetachedFromWindow() {
+            motion.cancel()
+            super.onDetachedFromWindow()
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val cx = width / 2f
+            val cy = height / 2f
+            val radius = minOf(width, height) * .37f
+            ring.color = raised
+            canvas.drawCircle(cx, cy, radius, ring)
+            ring.color = accent
+            ring.strokeCap = Paint.Cap.ROUND
+            canvas.drawArc(cx - radius, cy - radius, cx + radius, cy + radius, angle - 95f, 82f, false, ring)
+            for (index in 0..2) {
+                val radians = Math.toRadians((angle + index * 120f - 90f).toDouble())
+                val x = cx + (radius * kotlin.math.cos(radians)).toFloat()
+                val y = cy + (radius * kotlin.math.sin(radians)).toFloat()
+                node.color = if (index == 0) accent else muted
+                canvas.drawCircle(x, y, dp(if (index == 0) 4 else 3).toFloat(), node)
+            }
+            center.color = android.graphics.Color.argb(30, Color.red(accent), Color.green(accent), Color.blue(accent))
+            canvas.drawCircle(cx, cy, dp(20).toFloat(), center)
+            center.color = accent
+            val p = dp(7).toFloat()
+            val star = android.graphics.Path().apply {
+                moveTo(cx, cy - p); lineTo(cx + p * .24f, cy - p * .24f); lineTo(cx + p, cy)
+                lineTo(cx + p * .24f, cy + p * .24f); lineTo(cx, cy + p); lineTo(cx - p * .24f, cy + p * .24f)
+                lineTo(cx - p, cy); lineTo(cx - p * .24f, cy - p * .24f); close()
+            }
+            canvas.drawPath(star, center)
+        }
     }
 
     private fun startTorPrivateWindow() {
         if (torServiceBound && torService != null && TorService.STATUS_ON == lastTorStatus) {
-            launchTorWindow(pendingTorStartUrl ?: homeUrl)
+            val targetUrl = pendingTorStartUrl ?: homeUrl
+            pendingTorStartUrl = null
+            launchTorWindow(targetUrl)
             return
         }
-        pendingTorStartUrl = homeUrl
+        torLaunchQueued = false
+        pendingTorStartUrl = pendingTorStartUrl ?: homeUrl
         val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(22), dp(8), dp(22), dp(8))
-            addView(label("Connecting to the Tor network…", 16f, ink, true))
-            addView(label("The first connection can take a little while. Aster will open the private window only after Tor reports an established circuit.", 13f, muted, false).apply { setPadding(0, dp(8), 0, 0) })
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(24), dp(10), dp(24), dp(12)); background = shape(panel, 24)
         }
-        torStartupDialog = AlertDialog.Builder(this)
-            .setTitle("Starting Tor")
-            .setView(content)
-            .setNegativeButton("Cancel") { _, _ -> failTorWindowStart(null) }
-            .create().also { it.show(); it.styleDialog() }
+        content.addView(TorCircuitView().apply { contentDescription = "Animated Tor circuit connection" },
+            LinearLayout.LayoutParams(dp(106), dp(106)).apply { bottomMargin = dp(8) })
+        torProgressHeadline = label("Building your private route", 18f, ink, true).apply { gravity = Gravity.CENTER }
+        content.addView(torProgressHeadline)
+        torProgressDetail = label("Starting Tor and requesting a first circuit. This can take a little while.", 13f, muted, false).apply {
+            gravity = Gravity.CENTER; setPadding(0, dp(6), 0, dp(13))
+        }
+        content.addView(torProgressDetail)
+        val progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            isIndeterminate = true
+            indeterminateTintList = android.content.res.ColorStateList.valueOf(accent)
+            progressTintList = android.content.res.ColorStateList.valueOf(accent)
+        }
+        content.addView(progress, LinearLayout.LayoutParams(-1, dp(4)))
+        val stage = LinearLayout(this).apply { gravity = Gravity.CENTER; setPadding(0, dp(13), 0, dp(1)) }
+        listOf("CONNECT", "CIRCUIT", "PRIVATE WINDOW").forEachIndexed { index, text ->
+            val step = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
+            step.addView(View(this@MainActivity).apply { background = shape(if (index == 0) accent else raised, 8) },
+                LinearLayout.LayoutParams(dp(8), dp(8)).apply { bottomMargin = dp(5) })
+            step.addView(label(text, 8f, if (index == 0) accent else muted, true))
+            stage.addView(step, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        content.addView(stage)
+        val startup = AlertDialog.Builder(this).create()
+        startup.setView(content)
+        startup.setButton(AlertDialog.BUTTON_NEGATIVE, "Cancel", null as android.content.DialogInterface.OnClickListener?)
+        startup.setOnCancelListener { failTorWindowStart(null) }
+        torStartupDialog = startup
+        startup.show()
+        startup.window?.setLayout(if (resources.configuration.screenWidthDp >= 700) dp(480) else -1, -2)
+        startup.styleDialog()
+        content.alpha = 0f; content.translationY = dp(14).toFloat(); content.scaleX = .98f; content.scaleY = .98f
+        content.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f).setDuration(motionDuration(270L))
+            .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+        startup.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener { failTorWindowStart(null) }
         if (!torWindowReceiverRegistered) {
             val filter = IntentFilter().apply {
                 addAction(TorService.ACTION_STATUS)
@@ -1008,14 +1656,28 @@ class MainActivity : Activity() {
     private var lastTorStatus: String? = null
 
     private fun launchPendingTorWindow() {
-        if (pendingTorStartUrl == null) return
+        if (pendingTorStartUrl == null || torLaunchQueued) return
         val port = torService?.socksPort ?: 0
         if (port !in 1..65535) return
-        val url = pendingTorStartUrl ?: homeUrl
-        pendingTorStartUrl = null
+        torLaunchQueued = true
+        updateTorProgress(TorService.STATUS_ON)
         torStartupHandler.removeCallbacks(torStartupTimeout)
-        torStartupDialog?.dismiss(); torStartupDialog = null
-        launchTorWindow(url, port)
+        torStartupHandler.postDelayed({
+            val url = pendingTorStartUrl ?: return@postDelayed
+            pendingTorStartUrl = null
+            torStartupDialog?.dismiss(); torStartupDialog = null
+            torProgressHeadline = null; torProgressDetail = null; torLaunchQueued = false
+            launchTorWindow(url, port)
+        }, if (torStartupDialog?.isShowing == true) motionDuration(420L) else 0L)
+    }
+
+    private fun updateTorProgress(state: String?) {
+        val headline = torProgressHeadline ?: return
+        val detail = torProgressDetail ?: return
+        val ready = state == TorService.STATUS_ON
+        headline.text = if (ready) "Your circuit is ready" else "Building your private route"
+        headline.setTextColor(if (ready) accent else ink)
+        detail.text = if (ready) "Opening your isolated Gecko window through Tor…" else "Starting Tor and requesting a first circuit. This can take a little while."
     }
 
     private fun launchTorWindow(url: String, socksPort: Int = torService?.socksPort ?: 0) {
@@ -1031,9 +1693,23 @@ class MainActivity : Activity() {
     private fun failTorWindowStart(error: String?) {
         torStartupHandler.removeCallbacks(torStartupTimeout)
         pendingTorStartUrl = null
-        torStartupDialog?.dismiss(); torStartupDialog = null
-        releaseTorService()
-        if (!error.isNullOrBlank()) message("Tor connection failed", error)
+        torLaunchQueued = false
+        val dialog = torStartupDialog
+        val finishFailure = {
+            dialog?.dismiss()
+            if (torStartupDialog === dialog) torStartupDialog = null
+            torProgressHeadline = null; torProgressDetail = null
+            releaseTorService()
+            if (!error.isNullOrBlank()) message("Tor connection failed", error)
+        }
+        if (!error.isNullOrBlank() && dialog?.isShowing == true) {
+            torProgressHeadline?.text = "Could not connect"
+            torProgressHeadline?.setTextColor(0xffff9a90.toInt())
+            torProgressDetail?.text = "${error.take(220)}\n\nNo page was opened outside Tor."
+            dialog.window?.decorView?.animate()?.alpha(.9f)?.setDuration(motionDuration(150L))?.withEndAction {
+                dialog.window?.decorView?.animate()?.alpha(1f)?.setDuration(motionDuration(170L))?.withEndAction { finishFailure() }?.start()
+            }?.start()
+        } else finishFailure()
     }
 
     private fun releaseTorService() {
@@ -1074,12 +1750,10 @@ class MainActivity : Activity() {
 
     private fun openChromiumEngine() {
         try {
-            val currentUrl = current()?.url?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
-            val intent = if (currentUrl != null) {
-                Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl)).setPackage("app.aster.chromium")
-            } else {
-                packageManager.getLaunchIntentForPackage("app.aster.chromium")
-            }
+            // Use Chromium's normal launcher entry for every handoff. ACTION_VIEW can
+            // enter Chrome through its URL-routing activity and lose Aster's tab extras
+            // on a cold start, leaving a blank tab instead of restoring the session.
+            val intent = packageManager.getLaunchIntentForPackage("app.aster.chromium")
             if (intent == null) {
                 message("Chromium is not installed", "Install the Aster Chromium build to use Chrome extensions. Your GeckoView tabs and add-ons remain here.")
             } else {
@@ -1087,8 +1761,15 @@ class MainActivity : Activity() {
                 intent.putStringArrayListExtra("aster_tabs", ArrayList(sharedTabs.map { it.url }))
                 intent.putStringArrayListExtra("aster_tab_titles", ArrayList(sharedTabs.map { it.title }))
                 intent.putExtra("aster_active_tab", sharedTabs.indexOfFirst { it.id == activeId }.coerceAtLeast(0))
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                startActivity(intent)
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                startActivity(
+                    intent,
+                    ActivityOptions.makeCustomAnimation(
+                        this,
+                        R.anim.engine_switch_enter,
+                        R.anim.engine_switch_exit
+                    ).toBundle()
+                )
             }
         } catch (_: Exception) {
             message("Could not open Chromium", "Install the Aster Chromium build to use Chrome extensions.")
@@ -1128,7 +1809,31 @@ class MainActivity : Activity() {
         importCrossEngineTabs(intent)
         if (tabs.none { it.id == activeId }) activeId = tabs.firstOrNull()?.id ?: 0L
         if (tabs.isEmpty()) createTab(homeUrl) else selectTab(activeId)
-        if (intent.getStringExtra("aster_action") == "ai") showLocalAi() else showBrowser()
+        handleAsterAction(intent)
+    }
+
+    private fun handleAsterAction(source: Intent?) {
+        when (source?.getStringExtra("aster_action")) {
+            "ai" -> showLocalAi()
+            "tools" -> showMenu()
+            "issue" -> beginIssueReport(
+                engineName = source.getStringExtra("aster_issue_engine") ?: "Chromium",
+                sourceHost = source.getStringExtra("aster_issue_host"),
+                sourceScreenshot = source.getByteArrayExtra("aster_issue_screenshot")
+            )
+            "privacy" -> showPrivacyDashboard()
+            "shred" -> confirmShredCurrentSite()
+            "extensions" -> showExtensions()
+            "settings" -> showSettings()
+            "tor" -> {
+                pendingTorStartUrl = source.getStringExtra("aster_tor_url")
+                    ?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
+                    ?: homeUrl
+                showBrowser()
+                showTorSetup()
+            }
+            else -> showBrowser()
+        }
     }
 
     private fun localModelDirectory(): File =
@@ -1160,6 +1865,7 @@ class MainActivity : Activity() {
         screen = "ai"
         val tabletLayout = resources.configuration.screenWidthDp >= 760
         addressRow.visibility = if (tabletLayout) View.VISIBLE else View.GONE
+        tabletTabsHost?.visibility = if (tabletLayout) View.VISIBLE else View.GONE
         current()?.url?.takeIf { it.startsWith("http://") || it.startsWith("https://") }?.let(address::setText)
         privacyBadge.text = "✦  ON DEVICE"
         val content = LinearLayout(this).apply {
@@ -1833,6 +2539,7 @@ class MainActivity : Activity() {
     private fun showExtensions() {
         screen = "extensions"
         addressRow.visibility = View.GONE
+        tabletTabsHost?.visibility = View.GONE
         privacyBadge.text = "✦  ADD-ONS"
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -2365,9 +3072,14 @@ class MainActivity : Activity() {
 
     private fun showBrowser() {
         screen="browser"; pageHost.removeAllViews(); pageHost.setBackgroundColor(dark); gecko.setBackgroundColor(dark); gecko.alpha=0f; gecko.translationY=dp(7).toFloat()
+        // GeckoView may currently be mounted in the split-screen AI page host.
+        // Detach it from that parent before returning to the normal browser host.
+        (gecko.parent as? ViewGroup)?.removeView(gecko)
         pageHost.addView(gecko,FrameLayout.LayoutParams(-1,-1))
         gecko.animate().alpha(1f).translationY(0f).setDuration(motionDuration(245L)).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
         addressRow.visibility=View.VISIBLE
+        tabletTabsHost?.visibility = View.VISIBLE
+        updateTabletTabStrip()
         current()?.let { if(it.url.startsWith("http")) address.setText(it.url) else address.setText("") }
         updateProtectionBadge()
     }
@@ -2376,6 +3088,11 @@ class MainActivity : Activity() {
             .usePrivateMode(privateMode)
             .suspendMediaWhenInactive(false)
             .build()
+        if (AsterDevicePolicy.isMetaQuest3s()) {
+            // GeckoView's desktop UA and desktop-width viewport are separate settings.
+            settings.setUserAgentMode(GeckoSessionSettings.USER_AGENT_MODE_DESKTOP)
+            settings.setViewportMode(GeckoSessionSettings.VIEWPORT_MODE_DESKTOP)
+        }
         return GeckoSession(settings)
     }
 
@@ -2393,6 +3110,7 @@ class MainActivity : Activity() {
             previous?.let { if (it.session.isOpen) extensions.setTabActive(it.session, false) }
         }
         activeId=id
+        updateTabletTabStrip()
         if(!tab.session.isOpen) tab.session.open(runtime)
         extensions.setTabActive(tab.session, true)
         tab.session.setContentBlockingDelegate(object : ContentBlocking.Delegate {
@@ -2404,6 +3122,7 @@ class MainActivity : Activity() {
             override fun onTitleChange(session: GeckoSession, title: String?) {
                 if (title.isNullOrBlank()) return
                 tab.title = title.take(160)
+                runOnUiThread { updateTabletTabStrip() }
                 if (tab.id == activeId && screen == "ai") updateAiPageContext()
                 if (!tab.privateMode) persistTabs()
             }
@@ -2435,6 +3154,7 @@ class MainActivity : Activity() {
                             recordAiNavigation("Page loaded", tab.title, url)
                         }
                     }
+                    updateTabletTabStrip()
                     persistTabs()
                 }
             }
@@ -2445,6 +3165,7 @@ class MainActivity : Activity() {
         if (!tab.loaded) { tab.session.loadUri(uriForTheme(tab.url)); tab.loaded = true }
         address.setText(if(tab.url.startsWith("http"))tab.url else "")
         updateProtectionBadge()
+        updateTabletTabStrip()
         persistTabs()
     }
     private fun closeTab(id:Long) {
@@ -2454,6 +3175,7 @@ class MainActivity : Activity() {
         tab.session.close()
         if(tabs.isEmpty()) tabs+=BrowserTab(nextId++,homeUrl,"New tab",newSession())
         if(activeId==id) { val next=tabs[minOf(ix,tabs.lastIndex)]; activeId=next.id; selectTab(next.id) }
+        updateTabletTabStrip()
         persistTabs()
     }
     private fun bookmarkCurrent() {
@@ -2461,6 +3183,41 @@ class MainActivity : Activity() {
         if(!url.startsWith("http")){ message("Bookmark","Open a website first, then add it to bookmarks."); return }
         val saved=prefs.getStringSet("bookmarks",emptySet())?.toMutableSet() ?: mutableSetOf()
         saved.add(url); prefs.edit().putStringSet("bookmarks",saved).apply(); message("Saved","Bookmark added.")
+    }
+
+    private fun shareTabsAndBookmarks() {
+        val openLinks = tabs.asSequence()
+            .filterNot { it.privateMode }
+            .filter { it.url.startsWith("https://") || it.url.startsWith("http://") }
+            .map { "${it.title.ifBlank { it.url }}\n${it.url}" }
+            .toList()
+        val savedLinks = prefs.getStringSet("bookmarks", emptySet())
+            .orEmpty()
+            .filter { it.startsWith("https://") || it.startsWith("http://") }
+            .sorted()
+        if (openLinks.isEmpty() && savedLinks.isEmpty()) {
+            message("Nothing to share", "Open a website or save a bookmark first.")
+            return
+        }
+        val payload = buildString {
+            appendLine("Aster Browser links")
+            if (openLinks.isNotEmpty()) {
+                appendLine()
+                appendLine("Open tabs")
+                openLinks.forEach { appendLine("• $it") }
+            }
+            if (savedLinks.isNotEmpty()) {
+                appendLine()
+                appendLine("Bookmarks")
+                savedLinks.forEach { appendLine("• $it") }
+            }
+        }
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "Aster Browser links")
+            putExtra(Intent.EXTRA_TEXT, payload)
+        }
+        startActivity(Intent.createChooser(send, "Send links with…"))
     }
     private fun current()=tabs.firstOrNull{it.id==activeId}
     private fun uriForTheme(url:String): String {

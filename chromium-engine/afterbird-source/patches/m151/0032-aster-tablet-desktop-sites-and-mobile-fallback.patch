@@ -1,0 +1,30 @@
+From: Aster Browser <aster@example.invalid>
+Subject: [PATCH] Enable tablet desktop sites with a per-site mobile fallback
+
+Enable Chromium's tablet desktop-site policy for tablet-sized contexts and make
+the menu's Mobile site action available. Users can keep desktop layouts across
+the tablet while switching individual sites such as Instagram back to mobile.
+
+diff --git a/chrome/common/chrome_features.cc b/chrome/common/chrome_features.cc
+--- a/chrome/common/chrome_features.cc
++++ b/chrome/common/chrome_features.cc
+@@ -1,2 +1,2 @@
+ const base::Feature kRequestDesktopSiteForTablets{
+-    "RequestDesktopSiteForTablets", base::FEATURE_DISABLED_BY_DEFAULT};
++    "RequestDesktopSiteForTablets", base::FEATURE_ENABLED_BY_DEFAULT};
+diff --git a/chrome/browser/flags/android/chrome_feature_list.cc b/chrome/browser/flags/android/chrome_feature_list.cc
+--- a/chrome/browser/flags/android/chrome_feature_list.cc
++++ b/chrome/browser/flags/android/chrome_feature_list.cc
+@@ -1,2 +1,2 @@
+ const base::Feature kAppMenuMobileSiteOption{"AppMenuMobileSiteOption",
+-                                            base::FEATURE_DISABLED_BY_DEFAULT};
++                                            base::FEATURE_ENABLED_BY_DEFAULT};
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tab/TabImpl.java b/chrome/android/java/src/org/chromium/chrome/browser/tab/TabImpl.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/tab/TabImpl.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/tab/TabImpl.java
+@@ -1,4 +1,4 @@
+             && ChromeFeatureList.isEnabled(ChromeFeatureList.REQUEST_DESKTOP_SITE_FOR_TABLETS)
+             && ChromeFeatureList.getFieldTrialParamByFeatureAsBoolean(
+                     ChromeFeatureList.REQUEST_DESKTOP_SITE_FOR_TABLETS,
+-                    REQUEST_DESKTOP_ENABLED_PARAM, false)) {
++                    REQUEST_DESKTOP_ENABLED_PARAM, true)) {

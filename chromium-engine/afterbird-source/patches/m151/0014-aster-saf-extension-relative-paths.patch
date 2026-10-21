@@ -1,7 +1,7 @@
 diff --git a/base/files/file_enumerator_posix.cc b/base/files/file_enumerator_posix.cc
 --- a/base/files/file_enumerator_posix.cc
 +++ b/base/files/file_enumerator_posix.cc
-@@ -191,7 +191,11 @@ FilePath FileEnumerator::Next() {
+@@ -191,7 +191,12 @@ FilePath FileEnumerator::Next() {
          for (auto& info : directory_entries_) {
            info.subdirs_ = subdirs_;
            if (info.IsDirectory()) {
@@ -15,7 +15,7 @@ diff --git a/base/files/file_enumerator_posix.cc b/base/files/file_enumerator_po
              pending_subdirs_.push(subdirs_);
              pending_subdirs_.top().push_back(info.GetName().value());
            }
-@@ -305,9 +309,14 @@ FilePath FileEnumerator::Next() {
+@@ -305,5 +310,11 @@ FilePath FileEnumerator::Next() {
  #if BUILDFLAG(IS_ANDROID)
 -  if (root_path_.IsContentUri() || root_path_.IsVirtualDocumentPath()) {
 +  if (root_path_.IsVirtualDocumentPath()) {

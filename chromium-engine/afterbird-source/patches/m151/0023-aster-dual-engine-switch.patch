@@ -1,9 +1,9 @@
 --- a/chrome/android/java/res/layout/new_tab_page_layout.xml
 +++ b/chrome/android/java/res/layout/new_tab_page_layout.xml
-@@ -206,7 +206,64 @@
+@@ -206,5 +206,63 @@
              android:textStyle="bold" />
      </LinearLayout>
-
++
 +    <!-- Switch to Aster's GeckoView package for its separate Firefox add-on profile. -->
 +    <LinearLayout
 +        android:id="@+id/aster_gecko_shortcut"
@@ -66,8 +66,7 @@
          android:id="@+id/composeplate_view_stub"
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
-@@ -395,6 +395,43 @@
-
+@@ -395,5 +395,44 @@
          updateSearchBoxTwoSideMargin();
          initializeLogoCoordinator();
 +        if ("app.aster.chromium".equals(mActivity.getPackageName())) {
@@ -96,10 +95,12 @@
 +                            intent.putStringArrayListExtra("aster_tabs", urls);
 +                            intent.putStringArrayListExtra("aster_tab_titles", titles);
 +                            intent.putExtra("aster_active_tab", active);
-+                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-+                                    | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
++                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
 +                                    | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
 +                            mActivity.startActivity(intent);
++                            mActivity.overridePendingTransition(
++                                    android.R.anim.fade_in,
++                                    android.R.anim.fade_out);
 +                        }
 +                    });
 +            geckoShortcut.setAlpha(0f);

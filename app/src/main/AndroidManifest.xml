@@ -13,6 +13,7 @@
         android:usesCleartextTraffic="false"
         android:allowBackup="true"
         android:fullBackupContent="true"
+        android:taskAffinity="app.aster.shared"
         android:resizeableActivity="true">
         <meta-data
             android:name="com.oculus.supportedDevices"
@@ -31,7 +32,8 @@
             android:name=".TorPrivateActivity"
             android:process=":torprivate"
             android:exported="false"
-            android:launchMode="singleTask"
+            android:launchMode="standard"
+            android:taskAffinity="app.aster.shared"
             android:configChanges="density|keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|uiMode"
             android:label="Aster Tor Private Window" />
     </application>

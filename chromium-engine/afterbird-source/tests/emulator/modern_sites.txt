@@ -1,10 +1,11 @@
-# Modern-site coverage list for emulator e2e smoke traversal.
+# Modern-site URL launch and app-stability smoke traversal (not a page-render assertion).
 # Keep entries stable/public and accessible without auth.
 https://www.wikipedia.org/
 https://github.com/
 https://web.dev/
 https://developer.mozilla.org/
 https://m.youtube.com/
+https://www.instagram.com/
 https://www.reddit.com/
 https://news.ycombinator.com/
 https://www.theverge.com/

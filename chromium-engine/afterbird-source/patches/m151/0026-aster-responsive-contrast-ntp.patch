@@ -75,7 +75,7 @@ diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_ja
 diff --git a/chrome/browser/ui/android/ntp/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java b/chrome/browser/ui/android/ntp/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
 --- a/chrome/browser/ui/android/ntp/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
 +++ b/chrome/browser/ui/android/ntp/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
-@@ -395,4 +395,48 @@
+@@ -395,4 +395,51 @@
          updateSearchBoxTwoSideMargin();
          initializeLogoCoordinator();
          if ("app.aster.chromium".equals(mActivity.getPackageName())) {
@@ -105,7 +105,10 @@ diff --git a/chrome/browser/ui/android/ntp/java/src/org/chromium/chrome/browser/
 +                R.id.aster_brand_intro,
 +                R.id.aster_extensions_shortcut,
 +                R.id.aster_update_shortcut,
-+                R.id.aster_gecko_shortcut
++                R.id.aster_gecko_shortcut,
++                R.id.aster_ai_shortcut,
++                R.id.aster_tor_shortcut,
++                R.id.aster_tools_shortcut
 +            }) {
 +                View item = mNewTabPageLayout.findViewById(id);
 +                if (item != null && item.getLayoutParams()
