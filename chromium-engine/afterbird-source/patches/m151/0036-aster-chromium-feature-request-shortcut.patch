@@ -1,0 +1,96 @@
+From: Aster Browser <aster@example.invalid>
+Subject: [PATCH] Add a direct feature request shortcut in Chromium
+
+Open the Aster feature request draft in a regular Chromium tab so users do not
+have to switch to Gecko just to submit a request.
+
+diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/android/java/res/layout/new_tab_page_layout.xml
+--- a/chrome/android/java/res/layout/new_tab_page_layout.xml
++++ b/chrome/android/java/res/layout/new_tab_page_layout.xml
+@@ -435,1 +435,57 @@
++    <LinearLayout
++        android:id="@+id/aster_feature_request_shortcut"
++        android:layout_width="match_parent"
++        android:layout_height="wrap_content"
++        android:layout_marginStart="28dp"
++        android:layout_marginTop="10dp"
++        android:layout_marginEnd="28dp"
++        android:background="@drawable/aster_ntp_extension_card"
++        android:clickable="true"
++        android:focusable="true"
++        android:foreground="?attr/selectableItemBackground"
++        android:gravity="center_vertical"
++        android:minHeight="72dp"
++        android:orientation="horizontal"
++        android:paddingStart="16dp"
++        android:paddingTop="12dp"
++        android:paddingEnd="18dp"
++        android:paddingBottom="12dp">
++        <ImageView
++            android:layout_width="38dp"
++            android:layout_height="38dp"
++            android:contentDescription="@null"
++            android:background="@drawable/aster_ntp_extension_icon_background"
++            android:padding="5dp"
++            android:src="@drawable/aster_ntp_logo" />
++        <LinearLayout
++            android:layout_width="0dp"
++            android:layout_height="wrap_content"
++            android:layout_marginStart="14dp"
++            android:layout_weight="1"
++            android:orientation="vertical">
++            <TextView
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:text="Request a feature"
++                android:textColor="@color/aster_brand_primary_text"
++                android:textSize="14sp"
++                android:textStyle="bold" />
++            <TextView
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_marginTop="3dp"
++                android:text="Open an Aster request draft in Chromium"
++                android:textColor="@color/aster_brand_secondary_text"
++                android:textSize="12sp" />
++        </LinearLayout>
++        <TextView
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_marginStart="8dp"
++            android:text="›"
++            android:textColor="@color/aster_brand_accent"
++            android:textSize="26sp"
++            android:textStyle="bold" />
++    </LinearLayout>
++
+     <!-- Composeplate / "AI Mode" -->
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+@@ -553,2 +553,25 @@
+             toolsShortcut.animate().alpha(1f).translationY(0f).setStartDelay(360).setDuration(340).start();
++
++            View featureRequestShortcut =
++                    mNewTabPageLayout.findViewById(R.id.aster_feature_request_shortcut);
++            featureRequestShortcut.setOnClickListener(
++                    view -> {
++                        org.chromium.chrome.browser.app.ChromeActivity activity =
++                                (org.chromium.chrome.browser.app.ChromeActivity) mActivity;
++                        activity.getTabModelSelector().openNewTab(
++                                new org.chromium.content_public.browser.LoadUrlParams(
++                                        "https://github.com/B1progame/aster-browser/issues/new?labels=enhancement&title=Feature%20request"),
++                                org.chromium.chrome.browser.tab.TabLaunchType.FROM_EXTERNAL_APP,
++                                null,
++                                false);
++                    });
++            featureRequestShortcut.setAlpha(0f);
++            featureRequestShortcut.setTranslationY(
++                    10f * mActivity.getResources().getDisplayMetrics().density);
++            featureRequestShortcut.animate()
++                    .alpha(1f)
++                    .translationY(0f)
++                    .setStartDelay(430)
++                    .setDuration(340)
++                    .start();
+         }
