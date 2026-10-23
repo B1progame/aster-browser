@@ -74,6 +74,19 @@ private data class BrowserTab(
 private data class AiNavigationEvent(val action: String, val title: String, val url: String)
 private data class AiChatMessage(val text: String, val isUser: Boolean)
 private data class IssueCapture(val bitmap: Bitmap, val addressRect: Rect?, val pageRect: Rect?)
+
+/** GeckoView permits one runtime per process; keep it alive across Activity handoffs. */
+private object AsterGeckoRuntime {
+    @Volatile private var instance: GeckoRuntime? = null
+
+    fun get(context: Context, settings: GeckoRuntimeSettings): GeckoRuntime =
+        instance ?: synchronized(this) {
+            instance ?: GeckoRuntime.create(context.applicationContext, settings).also {
+                instance = it
+            }
+        }
+}
+
 private const val REQUEST_EXTENSION_FILE = 4201
 private const val REQUEST_LOCAL_MODEL = 4202
 private const val MAX_EXTENSION_BYTES = 50L * 1024L * 1024L
@@ -290,7 +303,7 @@ class MainActivity : Activity() {
             .safeBrowsing(ContentBlocking.SafeBrowsing.DEFAULT)
             .contentBlockingDatabase(true)
             .build()
-        runtime = GeckoRuntime.create(this, GeckoRuntimeSettings.Builder()
+        runtime = AsterGeckoRuntime.get(this, GeckoRuntimeSettings.Builder()
             .contentBlocking(blocking)
             .globalPrivacyControlEnabled(true)
             .build())
@@ -677,9 +690,9 @@ class MainActivity : Activity() {
         content.addView(menuRow(R.drawable.ic_feedback, "Prepare issue report", "Choose safe diagnostics and screenshot") { dialog.dismiss(); beginIssueReport() })
         content.addView(menuRow(R.drawable.ic_shred, "Shred this website", "Clear this site's saved data") { dialog.dismiss(); confirmShredCurrentSite() })
         content.addView(menuRow(R.drawable.ic_feedback, "Request a feature", "Draft a request for Aster") { dialog.dismiss(); showFeatureRequest() })
-        content.addView(menuRow(R.drawable.ic_download, "Downloads", "Download handling · planned") { dialog.dismiss(); message("Downloads", "Download management is planned for a future version.") })
+        content.addView(menuRow(R.drawable.aster_ic_download, "Downloads", "Download handling · planned") { dialog.dismiss(); message("Downloads", "Download management is planned for a future version.") })
         content.addView(menuRow(R.drawable.ic_extensions, "Extensions", "Manage installed add-ons") { dialog.dismiss(); showExtensions() })
-        content.addView(menuRow(R.drawable.ic_settings, "Settings", "Appearance, search and privacy") { dialog.dismiss(); showSettings() })
+        content.addView(menuRow(R.drawable.aster_ic_settings, "Settings", "Appearance, search and privacy") { dialog.dismiss(); showSettings() })
         val divider = View(this).apply { setBackgroundColor(raised) }
         val dividerLp = LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(8); bottomMargin = dp(8) }
         content.addView(divider, dividerLp)
@@ -1750,10 +1763,13 @@ class MainActivity : Activity() {
 
     private fun openChromiumEngine() {
         try {
-            // Use Chromium's normal launcher entry for every handoff. ACTION_VIEW can
-            // enter Chrome through its URL-routing activity and lose Aster's tab extras
-            // on a cold start, leaving a blank tab instead of restoring the session.
-            val intent = packageManager.getLaunchIntentForPackage("app.aster.chromium")
+            // In the unified package, open Chromium's activity directly in the current
+            // Android task. Keep the old package fallback for standalone development APKs.
+            val intent = Intent().setClassName(
+                packageName,
+                "org.chromium.chrome.browser.ChromeTabbedActivity"
+            ).takeIf { it.resolveActivity(packageManager) != null }
+                ?: packageManager.getLaunchIntentForPackage("app.aster.chromium")
             if (intent == null) {
                 message("Chromium is not installed", "Install the Aster Chromium build to use Chrome extensions. Your GeckoView tabs and add-ons remain here.")
             } else {
@@ -1776,19 +1792,28 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Import the safe, portable part of a session from the other engine: normal HTTP(S) tabs. */
+    /** Merge portable normal HTTP(S) tabs from the other engine without discarding this engine's tabs. */
     private fun importCrossEngineTabs(source: Intent?) {
         val urls = source?.getStringArrayListExtra("aster_tabs") ?: return
         val titles = source.getStringArrayListExtra("aster_tab_titles").orEmpty()
+        val existingByUrl = tabs.filter { !it.privateMode }
+            .associateBy { it.url.trimEnd('/') }
         val imported = urls.mapIndexedNotNull { index, raw ->
             val uri = runCatching { Uri.parse(raw) }.getOrNull() ?: return@mapIndexedNotNull null
             if (uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) return@mapIndexedNotNull null
-            BrowserTab(nextId++, uri.toString(), titles.getOrNull(index)?.take(120)?.ifBlank { uri.host!! } ?: uri.host!!, newSession())
+            val normalized = uri.toString().trimEnd('/')
+            existingByUrl[normalized] ?: BrowserTab(
+                nextId++,
+                uri.toString(),
+                titles.getOrNull(index)?.take(120)?.ifBlank { uri.host!! } ?: uri.host!!,
+                newSession()
+            )
+        }
+        val newlyImported = imported.filter { importedTab -> tabs.none { it.id == importedTab.id } }
+        if (newlyImported.isNotEmpty()) {
+            tabs.addAll(0, newlyImported)
         }
         if (imported.isNotEmpty()) {
-            tabs.filter { !it.privateMode }.forEach { if (it.session.isOpen) it.session.close() }
-            tabs.removeAll { !it.privateMode }
-            tabs.addAll(0, imported)
             val wanted = source.getIntExtra("aster_active_tab", 0).coerceIn(0, imported.lastIndex)
             activeId = imported[wanted].id
             persistTabs()
@@ -1821,6 +1846,7 @@ class MainActivity : Activity() {
                 sourceHost = source.getStringExtra("aster_issue_host"),
                 sourceScreenshot = source.getByteArrayExtra("aster_issue_screenshot")
             )
+            "feature" -> showFeatureRequest()
             "privacy" -> showPrivacyDashboard()
             "shred" -> confirmShredCurrentSite()
             "extensions" -> showExtensions()
@@ -3005,7 +3031,7 @@ class MainActivity : Activity() {
             "Extensions" -> R.drawable.ic_extensions
             "Request a feature" -> R.drawable.ic_feedback
             "Send to PC" -> R.drawable.ic_share
-            else -> R.drawable.ic_settings
+            else -> R.drawable.aster_ic_settings
         }
         val box=LinearLayout(this).apply {
             orientation=LinearLayout.HORIZONTAL

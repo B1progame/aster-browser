@@ -1,0 +1,31 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <application
+        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:label="Aster Browser"
+        android:allowBackup="true"
+        android:fullBackupContent="true"
+        android:taskAffinity="app.aster.shared"
+        android:resizeableActivity="true">
+        <meta-data
+            android:name="com.oculus.supportedDevices"
+            android:value="quest2|questpro|quest3|quest3s" />
+        <activity
+            android:name="app.aster.browser.MainActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:taskAffinity="app.aster.shared"
+            android:configChanges="density|keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|uiMode">
+            <layout android:defaultWidth="1024dp" android:defaultHeight="640dp" />
+        </activity>
+        <activity
+            android:name="app.aster.browser.TorPrivateActivity"
+            android:process=":torprivate"
+            android:exported="false"
+            android:launchMode="standard"
+            android:taskAffinity="app.aster.shared"
+            android:configChanges="density|keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|uiMode"
+            android:label="Aster Tor Private Window" />
+    </application>
+</manifest>

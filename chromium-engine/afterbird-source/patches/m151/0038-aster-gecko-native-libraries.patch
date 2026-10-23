@@ -1,0 +1,14 @@
+--- a/chrome/android/BUILD.gn
++++ b/chrome/android/BUILD.gn
+@@ -2078,6 +2078,11 @@ if (_is_default_toolchain) {
+   chrome_public_apk_or_module_tmpl("chrome_public_apk") {
+     target_type = "android_apk"
+     apk_name = "ChromePublic"
++    shared_libraries = [
++      "//chrome/android:libchrome",
++      "//third_party/aster:aster_gecko_native_libraries",
++    ]
++    srcjar_deps = [ "//chrome/android:libchrome__jni_registration($default_toolchain)" ]
+     if (defined(android_app_secondary_abi)) {
+       # Ensure 64-bit chrome does not depend on 32-bit things.
+       assert_no_deps =

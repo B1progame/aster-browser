@@ -4,7 +4,7 @@ diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/and
 @@ -261,3 +261,60 @@
      </LinearLayout>
 
-+    <!-- Open Aster's on-device chat with the current Chromium tabs attached. -->
++    <!-- Open Aster's separate on-device chat in the Chromium build. -->
 +    <LinearLayout
 +        android:id="@+id/aster_ai_shortcut"
 +        android:layout_width="match_parent"
@@ -47,7 +47,7 @@ diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/and
 +                android:layout_width="wrap_content"
 +                android:layout_height="wrap_content"
 +                android:layout_marginTop="3dp"
-+                android:text="Open pages beside your local assistant"
++                android:text="Prompts stay on this device"
 +                android:textColor="@color/aster_brand_secondary_text"
 +                android:textSize="12sp" />
 +        </LinearLayout>
@@ -77,7 +77,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageC
 +                        if (intent == null) {
 +                            android.widget.Toast.makeText(
 +                                            mActivity,
-+                                            "Install Aster GeckoView to open the local AI assistant",
++                                            "Install Aster Chromium tools to open the local AI assistant",
 +                                            android.widget.Toast.LENGTH_LONG)
 +                                    .show();
 +                            return;
@@ -101,7 +101,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageC
 +                        intent.putStringArrayListExtra("aster_tabs", urls);
 +                        intent.putStringArrayListExtra("aster_tab_titles", titles);
 +                        intent.putExtra("aster_active_tab", active);
-+                        intent.putExtra("aster_action", "ai");
++                        intent.putExtra("aster_feature", "ai");
 +                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
 +                                | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
 +                                | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);

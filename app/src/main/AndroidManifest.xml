@@ -36,5 +36,19 @@
             android:taskAffinity="app.aster.shared"
             android:configChanges="density|keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|uiMode"
             android:label="Aster Tor Private Window" />
+        <activity
+            android:name=".ChromiumFeaturesActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:taskAffinity="app.aster.shared"
+            android:configChanges="density|keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|uiMode"
+            android:label="Aster Chromium Tools" />
+        <activity
+            android:name=".ChromiumTorActivity"
+            android:exported="false"
+            android:launchMode="standard"
+            android:taskAffinity="app.aster.shared"
+            android:configChanges="density|keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|uiMode"
+            android:label="Aster Chromium Tor Window" />
     </application>
 </manifest>

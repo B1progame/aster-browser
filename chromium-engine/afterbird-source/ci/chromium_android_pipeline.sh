@@ -53,6 +53,9 @@ Behavior:
 
 Environment overrides:
   AFTERBIRD_ARGS_VARIANT           GN args variant: 'test', 'release', 'aster-x64', or 'aster-arm64' (default: test)
+  AFTERBIRD_ANDROID_KEYSTORE_PATH  Optional Android signing keystore; omitted uses Chromium's debug key
+  AFTERBIRD_ANDROID_KEYSTORE_NAME  Keystore alias when a custom path is supplied
+  AFTERBIRD_ANDROID_KEYSTORE_PASSWORD Keystore password when a custom path is supplied
   AFTERBIRD_NINJA_JOBS             Parallel ninja jobs for --full-build (default: min(cores, RAM_GiB/2))
   AFTERBIRD_CHROMIUM_SRC_GIT_URL   Chromium git remote (default: chromium.googlesource.com)
   AFTERBIRD_FETCH_RETRIES          Retries for tag fetch (default: 3)
@@ -348,12 +351,39 @@ stage_bundled_ublock() {
   log "Staged checksum-verified uBlock Origin 1.73.0 asset into Chromium APK resources"
 }
 
+stage_aster_engine() {
+  case "${ARGS_VARIANT}" in
+    aster-x64|aster-arm64) ;;
+    *) return ;;
+  esac
+
+  local stage_script="${REPO_ROOT}/../../aster-engine/scripts/stage_chromium_integration.sh"
+  [[ -f "${stage_script}" ]] || die "Missing Gecko integration staging script: ${stage_script}"
+  export ASTER_GRADLE_CMD="${AFTERBIRD_GRADLE_CMD:-${ASTER_GRADLE_CMD:-gradle}}"
+  log "Building and staging the Gecko engine into the single Chromium package"
+  bash "${stage_script}" "${WORKDIR}/src"
+}
+
 run_gn_checks() {
   [[ -f "${REFERENCE_ARGS_FILE}" ]] || die "Missing reference args file: ${REFERENCE_ARGS_FILE}"
 
   local out_path="${WORKDIR}/src/${OUT_DIR}"
   mkdir -p "${out_path}"
   cp "${REFERENCE_ARGS_FILE}" "${out_path}/args.gn"
+
+  if [[ -n "${AFTERBIRD_ANDROID_KEYSTORE_PATH:-}" ]]; then
+    [[ -f "${AFTERBIRD_ANDROID_KEYSTORE_PATH}" ]] || die "Android keystore not found: ${AFTERBIRD_ANDROID_KEYSTORE_PATH}"
+    [[ -n "${AFTERBIRD_ANDROID_KEYSTORE_NAME:-}" ]] || die "AFTERBIRD_ANDROID_KEYSTORE_NAME is required with a custom keystore"
+    [[ -n "${AFTERBIRD_ANDROID_KEYSTORE_PASSWORD:-}" ]] || die "AFTERBIRD_ANDROID_KEYSTORE_PASSWORD is required with a custom keystore"
+    for value in "${AFTERBIRD_ANDROID_KEYSTORE_PATH}" "${AFTERBIRD_ANDROID_KEYSTORE_NAME}" "${AFTERBIRD_ANDROID_KEYSTORE_PASSWORD}"; do
+      [[ "${value}" != *'"'* && "${value}" != *$'\n'* ]] || die "Android signing values may not contain quotes or newlines"
+    done
+    cat >> "${out_path}/args.gn" <<EOF
+android_keystore_path = "${AFTERBIRD_ANDROID_KEYSTORE_PATH}"
+android_keystore_name = "${AFTERBIRD_ANDROID_KEYSTORE_NAME}"
+android_keystore_password = "${AFTERBIRD_ANDROID_KEYSTORE_PASSWORD}"
+EOF
+  fi
 
   pushd "${WORKDIR}/src" >/dev/null
   log "Running gn gen ${OUT_DIR}"
@@ -502,6 +532,7 @@ main() {
   apply_overlay
   apply_patches
   stage_bundled_ublock
+  stage_aster_engine
   run_gn_checks
 
   if [[ "${FULL_BUILD}" -eq 1 ]]; then

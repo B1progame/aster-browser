@@ -23,8 +23,10 @@ android {
         applicationId = "app.aster.browser"
         minSdk = 29
         targetSdk = 34
-        versionCode = 5
-        versionName = "3.0.0"
+        // Keep the Android package code above Chromium's upstream-derived
+        // 792,203,879 used by the previous combined APK release.
+        versionCode = 800000000
+        versionName = "4.0.0"
     }
     buildTypes {
         getByName("debug") { applicationIdSuffix = ".debug" }
@@ -49,6 +51,7 @@ dependencies {
     implementation("info.guardianproject:jtorctl:0.4.5.7")
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")
     implementation("androidx.core:core-ktx:1.16.0")
+    implementation("androidx.webkit:webkit:1.18.0")
     configurations.configureEach {
         resolutionStrategy.force("androidx.core:core:1.16.0", "androidx.core:core-ktx:1.16.0")
     }

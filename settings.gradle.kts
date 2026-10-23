@@ -11,4 +11,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "AsterBrowser"
-include(":app")
+include(":app", ":aster-engine")

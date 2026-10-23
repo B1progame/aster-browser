@@ -13,7 +13,7 @@ class X64EmulatorVariantTests(unittest.TestCase):
         self.assertRegex(args, r'target_cpu\s*=\s*"x64"')
         self.assertRegex(args, r'is_desktop_android\s*=\s*true')
         self.assertRegex(args, r'is_java_debug\s*=\s*true')
-        self.assertRegex(args, r'chrome_public_manifest_package\s*=\s*"app\.aster\.chromium"')
+        self.assertRegex(args, r'chrome_public_manifest_package\s*=\s*"app\.aster\.browser"')
 
     def test_pipeline_accepts_aster_x64_and_arm64_variants(self):
         pipeline = (ROOT / "ci/chromium_android_pipeline.sh").read_text()

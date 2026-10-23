@@ -10,7 +10,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** Checks the public Aster release and downloads the GeckoView APK for this device. */
+/** Checks the public Aster release and downloads the combined browser APK for this device. */
 object AsterAppUpdater {
     private const val RELEASE_API = "https://api.github.com/repos/B1progame/aster-browser/releases/latest"
     private const val RELEASE_DOWNLOAD_PREFIX = "https://github.com/B1progame/aster-browser/releases/download/"
@@ -23,7 +23,7 @@ object AsterAppUpdater {
             val result = runCatching { checkAndQueueDownload(appContext, installedVersion) }
                 .getOrElse { "Update check failed: ${it.message ?: "check your connection and try again"}" }
             status.post { if (status.isAttachedToWindow) status.text = result }
-        }, "AsterGeckoUpdateCheck").apply {
+        }, "AsterUpdateCheck").apply {
             isDaemon = true
             start()
         }
@@ -41,17 +41,17 @@ object AsterAppUpdater {
             return if (comparison == 0) {
                 "Aster $installedVersion is up to date."
             } else {
-                "This GeckoView build ($installedVersion) is newer than the latest release $remoteVersion."
+                "This Aster build ($installedVersion) is newer than the latest release $remoteVersion."
             }
         }
 
         val abi = androidAbiSuffix()
-        val expectedName = "AsterBrowser-$remoteVersion-Gecko-Android-$abi.apk"
+        val expectedName = "AsterBrowser-$remoteVersion-Android-$abi.apk"
         val assets = release.getJSONArray("assets")
         val asset = (0 until assets.length())
             .map { assets.getJSONObject(it) }
             .firstOrNull { it.optString("name") == expectedName }
-            ?: return "Aster $remoteVersion is available, but this release has no GeckoView $abi APK yet."
+            ?: return "Aster $remoteVersion is available, but this release has no combined $abi APK yet."
 
         val downloadUrl = asset.getString("browser_download_url")
         val uri = Uri.parse(downloadUrl)
@@ -68,7 +68,7 @@ object AsterAppUpdater {
             .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, expectedName)
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
         manager.enqueue(request)
-        return "Downloading Aster $remoteVersion for GeckoView ($abi). Open the Android notification to install."
+        return "Downloading Aster $remoteVersion combined build ($abi). Open the Android notification to install."
     }
 
     private fun fetchLatestRelease(): JSONObject {

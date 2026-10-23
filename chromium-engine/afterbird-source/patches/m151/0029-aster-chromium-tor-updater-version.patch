@@ -4,7 +4,7 @@
              android:textStyle="bold" />
      </LinearLayout>
  
-+    <!-- Tor runs in Aster's isolated Gecko private-window process. -->
++    <!-- Tor runs in Aster's isolated Chromium WebView private-window process. -->
 +    <LinearLayout
 +        android:id="@+id/aster_tor_shortcut"
 +        android:layout_width="match_parent"
@@ -47,7 +47,7 @@
 +                android:layout_width="wrap_content"
 +                android:layout_height="wrap_content"
 +                android:layout_marginTop="3dp"
-+                android:text="Open this page through Tor in a private Gecko session"
++                android:text="Open this page through Tor in an isolated Chromium WebView"
 +                android:textColor="@color/aster_brand_secondary_text"
 +                android:textSize="12sp" />
 +        </LinearLayout>
@@ -79,7 +79,7 @@
 +                        if (intent == null) {
 +                            android.widget.Toast.makeText(
 +                                            mActivity,
-+                                            "Install Aster GeckoView to open a Tor private window",
++                                            "Install Aster Chromium tools to open a Tor private window",
 +                                            android.widget.Toast.LENGTH_LONG)
 +                                    .show();
 +                            return;
@@ -112,7 +112,7 @@
 +                        intent.putStringArrayListExtra("aster_tab_titles", titles);
 +                        intent.putExtra("aster_active_tab", active);
 +                        intent.putExtra("aster_tor_url", url);
-+                        intent.putExtra("aster_action", "tor");
++                        intent.putExtra("aster_feature", "tor");
 +                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
 +                                | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
 +                                | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -131,7 +131,7 @@
              }
              String abi = androidAbiSuffix();
 -            String expectedName = "AsterBrowser-" + tag + "-Android-" + abi + ".apk";
-+            String expectedName = "AsterBrowser-" + tag + "-Chromium-Android-" + abi + ".apk";
++            String expectedName = "AsterBrowser-" + tag + "-Android-" + abi + ".apk";
              JSONArray assets = release.getJSONArray("assets");
              for (int index = 0; index < assets.length(); index++) {
                  JSONObject asset = assets.getJSONObject(index);
@@ -142,5 +142,5 @@
      <string name="quick_action_search_widget_title" translatable="false">Aster quick action search</string>
      <!-- Bump this with the matching public GitHub release tag. -->
 -    <string name="aster_release_version" translatable="false">2.1.0</string>
-+    <string name="aster_release_version" translatable="false">3.0.0</string>
++    <string name="aster_release_version" translatable="false">4.0.0</string>
  </resources>

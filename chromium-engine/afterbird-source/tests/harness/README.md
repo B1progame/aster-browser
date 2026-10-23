@@ -97,7 +97,7 @@ extension because it uses an unsupported manifest version`); the
 With the Aster ARM64 APK installed on the connected Android Studio emulator,
 verify the ordinary startup path (no `--load-extension` flag) with:
 
-    AB_PKG=app.aster.chromium AB_PREINSTALLED=1 node checks/adblock-device.mjs
+    AB_PKG=app.aster.browser AB_PREINSTALLED=1 node checks/adblock-device.mjs
 
 The check attaches over CDP, waits for uBlock Origin's first-run filter-list
 compilation, then confirms ad/tracker requests are blocked on the live test

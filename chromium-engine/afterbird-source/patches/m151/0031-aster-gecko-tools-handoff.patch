@@ -2,7 +2,7 @@ diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/and
 --- a/chrome/android/java/res/layout/new_tab_page_layout.xml
 +++ b/chrome/android/java/res/layout/new_tab_page_layout.xml
 @@ -378,1 +378,58 @@
-+    <!-- Open the Gecko browser tools while carrying the portable web tabs. -->
++    <!-- Open Aster's native Chromium feature surface. -->
 +    <LinearLayout
 +        android:id="@+id/aster_tools_shortcut"
 +        android:layout_width="match_parent"
@@ -45,7 +45,7 @@ diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/and
 +                android:layout_width="wrap_content"
 +                android:layout_height="wrap_content"
 +                android:layout_marginTop="3dp"
-+                android:text="Gecko tools · Tor, AI, shredder and Firefox add-ons"
++                android:text="Chromium tools · Tor, AI, shredder and Chromium extensions"
 +                android:textColor="@color/aster_brand_secondary_text"
 +                android:textSize="12sp" />
 +        </LinearLayout>
@@ -74,7 +74,7 @@ diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/and
 +                        if (intent == null) {
 +                            android.widget.Toast.makeText(
 +                                            mActivity,
-+                                            "Install Aster GeckoView to open Aster tools",
++                                            "Install Aster Chromium tools to open Aster tools",
 +                                            android.widget.Toast.LENGTH_LONG)
 +                                    .show();
 +                            return;
@@ -98,7 +98,7 @@ diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/and
 +                        intent.putStringArrayListExtra("aster_tabs", urls);
 +                        intent.putStringArrayListExtra("aster_tab_titles", titles);
 +                        intent.putExtra("aster_active_tab", active);
-+                        intent.putExtra("aster_action", "tools");
++                        intent.putExtra("aster_feature", "tools");
 +                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
 +                                | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
 +                                | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -116,7 +116,7 @@ diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/and
 +        android:key="aster_tools"
 +        android:order="34"
 +        android:title="Aster tools"
-+        android:summary="Open Gecko tools: privacy, AI, Tor, shredder and Firefox add-ons"/>
++        android:summary="Open Chromium tools: privacy, AI, Tor, shredder and Chromium extensions"/>
  
  </PreferenceScreen>
 --- a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
@@ -133,7 +133,7 @@ diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/and
 +                            if (launchIntent == null) {
 +                                new AlertDialog.Builder(activity)
 +                                        .setTitle("Aster tools unavailable")
-+                                        .setMessage("Install the Aster GeckoView app to use its AI, Tor private window, privacy dashboard, site shredder and Firefox add-ons.")
++                                        .setMessage("Install the Aster Chromium tools to use its AI, Tor private window, privacy dashboard, site shredder and Chromium extensions.")
 +                                        .setPositiveButton("Close", null)
 +                                        .show();
 +                                return true;
@@ -157,7 +157,7 @@ diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/and
 +                            launchIntent.putStringArrayListExtra("aster_tabs", urls);
 +                            launchIntent.putStringArrayListExtra("aster_tab_titles", titles);
 +                            launchIntent.putExtra("aster_active_tab", active);
-+                            launchIntent.putExtra("aster_action", "tools");
++                            launchIntent.putExtra("aster_feature", "tools");
 +                            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
 +                                    | Intent.FLAG_ACTIVITY_CLEAR_TOP
 +                                    | Intent.FLAG_ACTIVITY_SINGLE_TOP);
