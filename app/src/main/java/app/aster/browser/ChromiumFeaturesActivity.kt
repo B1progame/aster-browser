@@ -1,6 +1,7 @@
 package app.aster.browser
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
@@ -12,12 +13,16 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.content.Context
 import android.widget.EditText
+import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.FutureTask
+import java.util.concurrent.TimeUnit
+import com.google.ai.edge.litertlm.tool
 
 /** Chromium-owned Aster feature surface. It never starts Gecko's MainActivity. */
 class ChromiumFeaturesActivity : Activity() {
@@ -32,6 +37,8 @@ class ChromiumFeaturesActivity : Activity() {
     private var transcript: LinearLayout? = null
     private var input: EditText? = null
     private var status: TextView? = null
+    private var includePageContext: CheckBox? = null
+    private var pageContext: AiPageContext? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -104,6 +111,21 @@ class ChromiumFeaturesActivity : Activity() {
 
     private fun showAi() {
         heading("Aster AI", "Local inference in the Chromium feature surface")
+        pageContext = AiPageContext.create(
+            intent.getStringExtra(EXTRA_PAGE_URL),
+            intent.getStringExtra(EXTRA_PAGE_TITLE),
+            intent.getStringExtra(EXTRA_PAGE_TEXT)
+        )
+        val page = pageContext
+        includePageContext = CheckBox(this).apply {
+            text = if (page == null) "No page text was shared by Chromium" else "Include this page in my prompts · ${page.title.ifBlank { Uri.parse(page.url).host.orEmpty() }}"
+            setTextColor(if (page == null) muted else ink)
+            isEnabled = page != null
+            isChecked = false
+            buttonTintList = android.content.res.ColorStateList.valueOf(accent)
+        }
+        content.addView(includePageContext)
+        content.addView(text("Chromium asks before sharing page text. This switch controls whether each prompt includes it. The model runs on this device; page text is treated as untrusted input.", 12f, muted, false))
         val model = getSharedPreferences("aster", MODE_PRIVATE).getString(CHROMIUM_MODEL_KEY, null)
             ?.let(::File)?.takeIf { it.isFile && it.length() > 1024 * 1024 }
         status = text(if (model == null) "Choose a .litertlm model to begin. Inference runs on-device." else "Model available · ${model.name}", 13f, muted, false)
@@ -143,17 +165,116 @@ class ChromiumFeaturesActivity : Activity() {
     }
 
     private fun showPrivacy() {
-        heading("Chromium privacy", "Protection is configured by the Chromium engine")
-        content.addView(text("This feature surface does not control Chromium's network stack. Use Chromium settings for site permissions and privacy controls; no Gecko settings are read or changed here.", 14f, muted, false))
-        content.addView(action("Open Chromium privacy settings", "Open Chromium privacy settings") {
-            launchChromiumUrl("chrome://settings/privacy")
-        })
+        val currentUrl = currentChromiumUrl()?.toString().orEmpty()
+        val host = currentChromiumUrl()?.host.orEmpty()
+        heading("Chromium privacy", if (host.isBlank()) "Controls apply to Chromium's regular profile" else "Native protection for $host")
+        content.addView(text("uBlock Origin runs in Chromium and supplies filter-list ad and tracker blocking. Its own site switch is available from the uBlock toolbar action. This panel also controls Chromium's native intrusive-ad setting for the current site.", 14f, muted, false))
+        if (host.isNotBlank()) {
+            val nativeBlocked = ChromiumProfileActions.intrusiveAdsBlocked(currentUrl)
+            val nativeAds = CheckBox(this).apply {
+                text = "Block intrusive ads on $host"; setTextColor(ink)
+                buttonTintList = android.content.res.ColorStateList.valueOf(accent)
+                isChecked = nativeBlocked == true; isEnabled = nativeBlocked != null
+                setOnCheckedChangeListener { _, checked ->
+                    isEnabled = false
+                    val result = ChromiumProfileActions.setIntrusiveAdsBlocked(currentUrl, checked)
+                    isEnabled = true
+                    if (!result.ok) isChecked = !checked
+                    Toast.makeText(this@ChromiumFeaturesActivity, result.message, Toast.LENGTH_LONG).show()
+                }
+            }
+            content.addView(nativeAds, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+            if (nativeBlocked == null) content.addView(text("This Chromium build does not expose its site content-settings bridge in this activity.", 12f, muted, false))
+            val cookiesBlocked = ChromiumProfileActions.siteCookiesBlocked(currentUrl)
+            val cookieControl = CheckBox(this).apply {
+                text = "Block cookies for $host · may sign you out"; setTextColor(ink)
+                buttonTintList = android.content.res.ColorStateList.valueOf(accent)
+                isChecked = cookiesBlocked == true; isEnabled = cookiesBlocked != null
+                setOnCheckedChangeListener { _, checked ->
+                    isEnabled = false
+                    val result = ChromiumProfileActions.setSiteCookiesBlocked(currentUrl, checked)
+                    isEnabled = true
+                    if (!result.ok) isChecked = !checked
+                    Toast.makeText(this@ChromiumFeaturesActivity, result.message, Toast.LENGTH_LONG).show()
+                }
+            }
+            content.addView(cookieControl, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+        } else content.addView(text("Open a regular website in Chromium to enable the per-site native control.", 13f, muted, false).apply { setPadding(0, dp(14), 0, dp(4)) })
+        content.addView(action("Open Chromium privacy settings", "Open Chromium privacy settings") { launchChromiumUrl("chrome://settings/privacy") }, LinearLayout.LayoutParams(-1, dp(50)).apply { topMargin = dp(12) })
+        content.addView(action("Manage uBlock Origin", "Open Chromium extension controls") { launchChromiumUrl("chrome://extensions") }, LinearLayout.LayoutParams(-1, dp(50)).apply { topMargin = dp(10) })
     }
 
     private fun showShred() {
-        heading("Site data", "Clear Chromium site data")
-        content.addView(text("To keep this action scoped to Chromium, open its built-in site data settings. This screen does not delete Gecko profile data.", 14f, muted, false))
-        content.addView(action("Open Chromium site settings", "Open Chromium site settings") { launchChromiumUrl("chrome://settings/content/all") })
+        val url = currentChromiumUrl()
+        val host = url?.host
+        heading("Website shredder", if (host == null) "Clear data from Chromium's profile" else "Clear Chromium data for $host")
+        content.addView(text("These actions use Chromium's own profile storage and never touch Gecko. Site-data clearing affects this host and can sign you out. History, cache, and cookies can also be cleared from the regular profile below.", 14f, muted, false))
+        val siteInput = EditText(this).apply {
+            hint = "Website host, e.g. example.com"; setHintTextColor(muted); setTextColor(ink)
+            setSingleLine(true); background = rounded(card, 16); setPadding(dp(12), dp(12), dp(12), dp(12))
+            setText(host.orEmpty())
+        }
+        content.addView(siteInput, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(14) })
+        val siteStatus = text("Ready", 13f, muted, false)
+        content.addView(siteStatus, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        content.addView(action("Shred this site's data", "Clear Chromium site data for the entered host") {
+            val safeHost = siteInput.text.toString().trim().lowercase(java.util.Locale.ROOT)
+                .removePrefix("https://").removePrefix("http://").substringBefore('/').substringBefore(':')
+            if (safeHost.isBlank()) { siteStatus.text = "Enter a website host first."; return@action }
+            AlertDialog.Builder(this)
+                .setTitle("Clear data for $safeHost?")
+                .setMessage("Chromium will delete supported cookies and stored site data for this host. The action cannot be undone.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Clear site data") { _, _ ->
+                    siteStatus.text = "Clearing Chromium site data…"
+                    ChromiumProfileActions.clearSiteData(this, safeHost) { result ->
+                        siteStatus.text = result.message
+                        Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
+                    }
+                }.show()
+        }, LinearLayout.LayoutParams(-1, dp(50)).apply { topMargin = dp(8) })
+
+        content.addView(text("Clear all time · choose data types", 16f, ink, true).apply { setPadding(0, dp(24), 0, dp(4)) })
+        val clearSite = check("Cookies and site data", true)
+        val clearCache = check("Cached images and files", false)
+        val clearHistory = check("Browsing history", false)
+        content.addView(clearSite); content.addView(clearCache); content.addView(clearHistory)
+        val allStatus = text("", 13f, muted, false).apply { setPadding(0, dp(8), 0, 0) }
+        content.addView(allStatus)
+        content.addView(action("Clear selected Chromium data", "Clear selected regular Chromium browsing data") {
+            val types = buildList {
+                if (clearSite.isChecked) add("SITE_DATA")
+                if (clearCache.isChecked) add("CACHE")
+                if (clearHistory.isChecked) add("HISTORY")
+            }
+            if (types.isEmpty()) { allStatus.text = "Select at least one data type."; return@action }
+            AlertDialog.Builder(this)
+                .setTitle("Clear selected Chromium data?")
+                .setMessage("This permanently clears the selected items from Chromium's regular profile for all time.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Clear selected data") { _, _ ->
+                    allStatus.text = "Clearing Chromium data…"
+                    ChromiumProfileActions.clearAllData(this, types) { result ->
+                        allStatus.text = result.message
+                        Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
+                    }
+                }.show()
+        }, LinearLayout.LayoutParams(-1, dp(50)).apply { topMargin = dp(10) })
+    }
+
+    private fun check(label: String, checked: Boolean) = CheckBox(this).apply {
+        text = label; isChecked = checked; setTextColor(ink)
+        buttonTintList = android.content.res.ColorStateList.valueOf(accent)
+    }
+
+    private fun currentChromiumUrl(): Uri? {
+        val extraUrl = intent.getStringExtra(EXTRA_PAGE_URL)
+        val urls = intent.getStringArrayListExtra("aster_tabs")
+        val activeIndex = intent.getIntExtra("aster_active_tab", 0)
+        val candidate = extraUrl ?: urls?.getOrNull(activeIndex)
+        val parsed = candidate?.let(Uri::parse) ?: return null
+        if ((parsed.scheme != "https" && parsed.scheme != "http") || parsed.host.isNullOrBlank()) return null
+        return parsed
     }
 
     private fun showExtensions() {
@@ -220,7 +341,7 @@ class ChromiumFeaturesActivity : Activity() {
     private fun loadModel(file: File) {
         status?.text = "Loading local model…"
         val ai = LocalAiHarness(this).also { harness = it }
-        ai.load(file, emptyList(), object : LocalAiHarness.LoadListener {
+        ai.load(file, listOf(tool(createChromiumBrowserTools())), object : LocalAiHarness.LoadListener {
             override fun onStatus(statusText: String) { status?.text = statusText }
             override fun onReady() { status?.text = "Ready · on-device inference"; addBubble("Aster is ready. Prompts stay on this device.", false) }
             override fun onError(error: String) { status?.text = "Model error · $error" }
@@ -237,11 +358,78 @@ class ChromiumFeaturesActivity : Activity() {
         addBubble(prompt, true)
         val response = text("", 14f, ink, false).apply { setPadding(dp(10), dp(8), dp(10), dp(8)); background = rounded(card, 14) }
         transcript?.addView(response, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
-        ai.send(prompt, object : LocalAiHarness.ReplyListener {
+        val localPrompt = if (includePageContext?.isChecked == true) {
+            val context = pageContext?.asPromptBlock()
+            if (context == null) prompt else "$prompt\n\n$context"
+        } else prompt
+        ai.send(localPrompt, object : LocalAiHarness.ReplyListener {
             override fun onChunk(text: String) { response.append(text) }
             override fun onDone() {}
             override fun onError(error: String) { response.text = "AI error: $error" }
         })
+    }
+
+    /** Chromium-only AI tools. Actions return to this Chromium activity, never Gecko. */
+    private fun createChromiumBrowserTools() = AsterBrowserTools(
+        findTabs = { rawQuery ->
+            val query = rawQuery.trim().lowercase(java.util.Locale.ROOT)
+            val urls = intent.getStringArrayListExtra("aster_tabs").orEmpty()
+            val titles = intent.getStringArrayListExtra("aster_tab_titles").orEmpty()
+            val activeIndex = intent.getIntExtra("aster_active_tab", 0)
+            urls.indices.asSequence()
+                .filter { i -> query.isBlank() || urls[i].lowercase().contains(query) || titles.getOrNull(i).orEmpty().lowercase().contains(query) }
+                .take(30)
+                .map { i -> mapOf("title" to titles.getOrNull(i).orEmpty().take(160), "url" to urls[i].take(2048), "active" to (i == activeIndex).toString()) }
+                .toList()
+        },
+        openTab = { rawUrl ->
+            val uri = runCatching { Uri.parse(rawUrl.trim()) }.getOrNull()
+            if (uri == null || uri.scheme !in setOf("https", "http") || uri.host.isNullOrBlank() || !uri.userInfo.isNullOrBlank()) {
+                "I can only open a complete HTTP or HTTPS website URL."
+            } else runOnUiThreadAndWait {
+                launchChromiumUrl(uri.toString())
+                "Opened ${uri.host} in Chromium. The page content has not been read unless you separately enable page sharing in the AI screen."
+            }
+        },
+        searchWeb = { rawQuery ->
+            val query = rawQuery.trim().take(240)
+            if (query.isBlank()) "Please provide search terms." else runOnUiThreadAndWait {
+                val engineName = getSharedPreferences("aster", MODE_PRIVATE).getString("engine", "DuckDuckGo") ?: "DuckDuckGo"
+                val base = when (engineName) {
+                    "Google" -> "https://www.google.com/search?q="
+                    "Bing" -> "https://www.bing.com/search?q="
+                    "Brave Search" -> "https://search.brave.com/search?q="
+                    else -> "https://duckduckgo.com/?q="
+                }
+                launchChromiumUrl(base + Uri.encode(query))
+                "Opened $engineName results in Chromium for: $query. I did not fetch or read the results."
+            }
+        },
+        inspectPrivacy = {
+            val page = currentChromiumUrl()
+            if (page == null) mapOf("status" to "Open a regular HTTP or HTTPS page in Chromium to inspect its configured protections.")
+            else mapOf(
+                "engine" to "Chromium",
+                "host" to page.host.orEmpty(),
+                "https" to (page.scheme == "https").toString(),
+                "nativeIntrusiveAdBlocking" to ChromiumProfileActions.intrusiveAdsBlocked(page.toString())?.toString().orEmpty().ifBlank { "unavailable" },
+                "extensionFiltering" to "uBlock Origin provides separate filter-list ad and tracker blocking; its live per-site state is not exposed to Aster.",
+                "limitations" to "This reads site configuration; it does not scan page requests or guarantee every ad and tracker is blocked."
+            )
+        },
+        readSharedPage = {
+            if (includePageContext?.isChecked != true) {
+                mapOf("status" to "The user has not enabled sharing this page with the local assistant.")
+            } else pageContext?.let { mapOf("url" to it.url, "title" to it.title, "text" to it.text) }
+                ?: mapOf("status" to "No readable page text was shared. Start Aster AI from a regular Chromium page and confirm sharing first.")
+        }
+    )
+
+    private fun <T> runOnUiThreadAndWait(action: () -> T): T {
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) return action()
+        val task = FutureTask<T> { action() }
+        runOnUiThread { task.run() }
+        return task.get(20, TimeUnit.SECONDS)
     }
 
     private fun addBubble(message: String, user: Boolean) {
@@ -293,6 +481,9 @@ class ChromiumFeaturesActivity : Activity() {
 
     companion object {
         const val EXTRA_FEATURE = "aster_feature"
+        const val EXTRA_PAGE_URL = "aster_page_url"
+        const val EXTRA_PAGE_TITLE = "aster_page_title"
+        const val EXTRA_PAGE_TEXT = "aster_page_text"
         const val FEATURE_AI = "ai"
         const val FEATURE_TOR = "tor"
         const val FEATURE_TOOLS = "tools"

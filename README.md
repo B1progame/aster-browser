@@ -1,5 +1,17 @@
 # Aster Browser
 
+> **Release status (verified 2026-10-23):** The latest public release is still v2.2.0 and contains the GeckoView build; v2.1.0 is the latest public release with Chromium APKs. GitHub issues [#1](https://github.com/B1progame/aster-browser/issues/1), [#2](https://github.com/B1progame/aster-browser/issues/2), and [#3](https://github.com/B1progame/aster-browser/issues/3) remain open. Do not treat the local v4.0.0 files in `dist/` as a release: they are not attached to GitHub, and the current source has later Chromium feature changes that have not been rebuilt into those APKs.
+
+## Development build status
+
+The checked-in Android metadata is version 4.0.0. A local v4.0.0 APK inspection confirmed the `app.aster.browser` package and both Chromium (`libchrome.so`) and Gecko (`libxul.so`) native engines in one APK. This verifies that a combined artifact has existed locally; it does not verify that the current source can reproduce it or that the two engines share profiles. Gecko and Chromium use separate profiles and site data.
+
+The repository's `chromium-engine/afterbird-source/` tree contains Aster's Chromium overlay and patches, not a complete Chromium source checkout. A fresh combined Chromium build requires the pinned full Chromium source tree and its Android build dependencies. Current source edits to Chromium AI page sharing and native profile controls are not included in the local v4.0.0 APKs. The combined engine must be rebuilt and checked on an emulator before publishing a new release.
+
+The Chromium feature surface is being brought up to parity, but it is not there yet. Its Tor shortcut currently opens a separate Tor-proxied Android WebView task, not a Tor profile inside Chromium's native tab model. Gecko and Chromium still have separate cookies, history, bookmarks, permissions, and extension state; transferring a tab URL does not migrate that data.
+
+For a Gecko-only development build, open this project in Android Studio and run `:app:assembleDebug`. The combined Chromium + Gecko build pipeline is [`chromium_android_pipeline.sh`](chromium-engine/afterbird-source/ci/chromium_android_pipeline.sh); it requires the pinned full Chromium source tree and Android build dependencies. The public updater currently points to the latest published release, not these local v4.0.0 artifacts.
+
 ## Public Android release
 
 The latest GeckoView release is [Aster Browser v2.2.0](https://github.com/B1progame/aster-browser/releases/tag/v2.2.0), with embedded Tor private windows. The latest Chromium/Afterbird release remains [v2.1.0](https://github.com/B1progame/aster-browser/releases/tag/v2.1.0), because a matching Chromium 2.2.0 build is not available yet. Gecko APKs are `AsterBrowser-v2.2.0-Gecko-Android-arm64.apk` for ARM64 phones and Quest, and `AsterBrowser-v2.2.0-Gecko-Android-x86_64.apk` for the Android Studio emulator. Chromium v2.1.0 APKs remain available on its release page. Android will ask you to confirm sideloading. The public source repository is [B1progame/aster-browser](https://github.com/B1progame/aster-browser).

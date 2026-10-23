@@ -65,7 +65,7 @@ diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/and
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
-@@ -434,3 +434,46 @@
+@@ -434,3 +434,87 @@
              geckoShortcut.animate().alpha(1f).translationY(0f).setStartDelay(150).setDuration(340).start();
          }
 +        if ("app.aster.chromium".equals(mActivity.getPackageName())) {
@@ -89,12 +89,16 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageC
 +                        java.util.ArrayList<String> urls = new java.util.ArrayList<>();
 +                        java.util.ArrayList<String> titles = new java.util.ArrayList<>();
 +                        int active = 0;
++                        org.chromium.chrome.browser.tab.Tab activeTab = null;
 +                        for (int i = 0; i < model.getCount(); i++) {
 +                            org.chromium.chrome.browser.tab.Tab tab = model.getTabAt(i);
 +                            if (tab == null || tab.getUrl() == null) continue;
 +                            String url = tab.getUrl().getSpec();
 +                            if (!url.startsWith("https://") && !url.startsWith("http://")) continue;
-+                            if (i == model.index()) active = urls.size();
++                            if (i == model.index()) {
++                                active = urls.size();
++                                activeTab = tab;
++                            }
 +                            urls.add(url);
 +                            titles.add(tab.getTitle() == null ? url : tab.getTitle().toString());
 +                        }
@@ -105,7 +109,44 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageC
 +                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
 +                                | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
 +                                | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
-+                        mActivity.startActivity(intent);
++                        if (activeTab != null && activeTab.getUrl() != null
++                                && (activeTab.getUrl().getSpec().startsWith("https://")
++                                        || activeTab.getUrl().getSpec().startsWith("http://"))) {
++                            final org.chromium.chrome.browser.tab.Tab pageTab = activeTab;
++                            final String pageUrl = activeTab.getUrl().getSpec();
++                            final String pageTitle = activeTab.getTitle() == null
++                                    ? pageUrl : activeTab.getTitle().toString();
++                            new android.app.AlertDialog.Builder(mActivity)
++                                    .setTitle("Share this page with Aster AI?")
++                                    .setMessage("Aster can read up to 12,000 characters of this page's accessible text. It stays on this device and is only attached to a prompt if you enable the page switch.")
++                                    .setNegativeButton("Cancel", null)
++                                    .setNeutralButton("Continue without sharing",
++                                            (dialog, which) -> mActivity.startActivity(intent))
++                                    .setPositiveButton("Share page text", (dialog, which) ->
++                                            pageTab.getWebContents().requestAccessibilitySnapshot(root -> {
++                                                StringBuilder extracted = new StringBuilder();
++                                                if (root != null) {
++                                                    java.util.ArrayDeque<org.chromium.content_public.browser.AccessibilitySnapshotNode> nodes = new java.util.ArrayDeque<>();
++                                                    nodes.add(root);
++                                                    while (!nodes.isEmpty() && extracted.length() < 12000) {
++                                                        org.chromium.content_public.browser.AccessibilitySnapshotNode node = nodes.removeFirst();
++                                                        if (node.text != null && !node.text.isEmpty()) {
++                                                            extracted.append(node.text).append('\n');
++                                                        }
++                                                        for (org.chromium.content_public.browser.AccessibilitySnapshotNode child : node.children) {
++                                                            if (child != null) nodes.addLast(child);
++                                                        }
++                                                    }
++                                                }
++                                                intent.putExtra("aster_page_url", pageUrl);
++                                                intent.putExtra("aster_page_title", pageTitle);
++                                                intent.putExtra("aster_page_text", extracted.toString());
++                                                mActivity.startActivity(intent);
++                                            }))
++                                    .show();
++                        } else {
++                            mActivity.startActivity(intent);
++                        }
 +                    });
 +            aiShortcut.setAlpha(0f);
 +            aiShortcut.setTranslationY(10f * mActivity.getResources().getDisplayMetrics().density);

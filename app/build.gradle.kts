@@ -52,6 +52,7 @@ dependencies {
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")
     implementation("androidx.core:core-ktx:1.16.0")
     implementation("androidx.webkit:webkit:1.18.0")
+    testImplementation("junit:junit:4.13.2")
     configurations.configureEach {
         resolutionStrategy.force("androidx.core:core:1.16.0", "androidx.core:core-ktx:1.16.0")
     }

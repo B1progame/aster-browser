@@ -10,7 +10,7 @@
        ":google_api_keys_java",
 --- a/chrome/android/java/AndroidManifest.xml
 +++ b/chrome/android/java/AndroidManifest.xml
-@@ -227,6 +227,7 @@
+@@ -227,5 +227,6 @@
          android:networkSecurityConfig="@xml/network_security_config"
          android:appComponentFactory="org.chromium.chrome.browser.base.SplitCompatAppComponentFactory"
 +        tools:replace="android:appComponentFactory,android:zygotePreloadName,android:allowBackup,android:label"
@@ -147,4 +147,89 @@
 +                                            activity, app.aster.browser.ChromiumFeaturesActivity.class);
                              if (launchIntent == null) {
                                  new android.app.AlertDialog.Builder(activity)
-                                         .setTitle("Aster issue reports unavailable")
+                                        .setTitle("Aster issue reports unavailable")
+diff --git a/chrome/android/java/res/xml/main_preferences.xml b/chrome/android/java/res/xml/main_preferences.xml
+--- a/chrome/android/java/res/xml/main_preferences.xml
++++ b/chrome/android/java/res/xml/main_preferences.xml
+@@ -163,1 +163,6 @@
+-</PreferenceScreen>
++    <Preference
++        android:key="aster_ai_page"
++        android:order="35"
++        android:title="Ask Aster about this page"
++        android:summary="Use the local AI with optional page context"/>
++</PreferenceScreen>
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
+@@ -449,2 +449,70 @@
+         IdentityManager identityManager =
+                 IdentityServicesProvider.get().getIdentityManager(getProfile());
++        findPreference("aster_ai_page")
++                .setOnPreferenceClickListener(
++                        preference -> {
++                            onPreferenceSelected(preference);
++                            Activity activity = getActivity();
++                            if (activity == null) return true;
++                            org.chromium.chrome.browser.app.ChromeActivity chromeActivity =
++                                    (org.chromium.chrome.browser.app.ChromeActivity) activity;
++                            org.chromium.chrome.browser.tabmodel.TabModel model =
++                                    chromeActivity.getTabModelSelector().getModel(false);
++                            java.util.ArrayList<String> urls = new java.util.ArrayList<>();
++                            java.util.ArrayList<String> titles = new java.util.ArrayList<>();
++                            int active = 0;
++                            org.chromium.chrome.browser.tab.Tab activeTab = null;
++                            for (int i = 0; i < model.getCount(); i++) {
++                                org.chromium.chrome.browser.tab.Tab tab = model.getTabAt(i);
++                                if (tab == null || tab.getUrl() == null) continue;
++                                String url = tab.getUrl().getSpec();
++                                if (!url.startsWith("https://") && !url.startsWith("http://")) continue;
++                                if (i == model.index()) {
++                                    active = urls.size();
++                                    activeTab = tab;
++                                }
++                                urls.add(url);
++                                titles.add(tab.getTitle() == null ? url : tab.getTitle().toString());
++                            }
++                            android.content.Intent aiIntent = new android.content.Intent(
++                                    activity, app.aster.browser.ChromiumFeaturesActivity.class);
++                            aiIntent.putStringArrayListExtra("aster_tabs", urls);
++                            aiIntent.putStringArrayListExtra("aster_tab_titles", titles);
++                            aiIntent.putExtra("aster_active_tab", active);
++                            aiIntent.putExtra("aster_feature", "ai");
++                            if (activeTab == null) {
++                                activity.startActivity(aiIntent);
++                                return true;
++                            }
++                            final org.chromium.chrome.browser.tab.Tab pageTab = activeTab;
++                            final String pageUrl = activeTab.getUrl().getSpec();
++                            final String pageTitle = activeTab.getTitle() == null
++                                    ? pageUrl : activeTab.getTitle().toString();
++                            new android.app.AlertDialog.Builder(activity)
++                                    .setTitle("Share this page with Aster AI?")
++                                    .setMessage("Aster can read up to 12,000 characters of this page's accessible text. The model runs locally. The text is only attached to a prompt if you enable the page switch.")
++                                    .setNegativeButton("Cancel", null)
++                                    .setNeutralButton("Continue without sharing",
++                                            (dialog, which) -> activity.startActivity(aiIntent))
++                                    .setPositiveButton("Share page text", (dialog, which) ->
++                                            pageTab.getWebContents().requestAccessibilitySnapshot(root -> {
++                                                StringBuilder extracted = new StringBuilder();
++                                                if (root != null) {
++                                                    java.util.ArrayDeque<org.chromium.content_public.browser.AccessibilitySnapshotNode> nodes = new java.util.ArrayDeque<>();
++                                                    nodes.add(root);
++                                                    while (!nodes.isEmpty() && extracted.length() < 12000) {
++                                                        org.chromium.content_public.browser.AccessibilitySnapshotNode node = nodes.removeFirst();
++                                                        if (node.text != null && !node.text.isEmpty()) extracted.append(node.text).append('\n');
++                                                        for (org.chromium.content_public.browser.AccessibilitySnapshotNode child : node.children) {
++                                                            if (child != null) nodes.addLast(child);
++                                                        }
++                                                    }
++                                                }
++                                                aiIntent.putExtra("aster_page_url", pageUrl);
++                                                aiIntent.putExtra("aster_page_title", pageTitle);
++                                                aiIntent.putExtra("aster_page_text", extracted.toString());
++                                                activity.startActivity(aiIntent);
++                                            }))
++                                    .show();
++                            return true;
++                        });
