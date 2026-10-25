@@ -25,8 +25,8 @@ android {
         targetSdk = 34
         // Keep the Android package code above Chromium's upstream-derived
         // 792,203,879 used by the previous combined APK release.
-        versionCode = 800000000
-        versionName = "4.0.0"
+        versionCode = 805000000
+        versionName = "5.0.0"
     }
     buildTypes {
         getByName("debug") { applicationIdSuffix = ".debug" }

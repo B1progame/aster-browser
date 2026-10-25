@@ -1,6 +1,6 @@
 --- a/chrome/android/java/res/layout/new_tab_page_layout.xml
 +++ b/chrome/android/java/res/layout/new_tab_page_layout.xml
-@@ -206,5 +206,63 @@
+@@ -206,6 +206,64 @@
              android:textStyle="bold" />
      </LinearLayout>
 +
@@ -61,6 +61,7 @@
 +            android:textStyle="bold" />
 +    </LinearLayout>
 +
+ 
      <!-- Composeplate / "AI Mode" -->
      <ViewStub
          android:id="@+id/composeplate_view_stub"

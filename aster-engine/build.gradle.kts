@@ -15,8 +15,8 @@ android {
 
     defaultConfig {
         minSdk = 29
-        buildConfigField("String", "VERSION_NAME", "\"4.0.0\"")
-        buildConfigField("int", "VERSION_CODE", "800000000")
+        buildConfigField("String", "VERSION_NAME", "\"5.0.0\"")
+        buildConfigField("int", "VERSION_CODE", "805000000")
     }
 
     sourceSets {

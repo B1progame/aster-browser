@@ -9,6 +9,7 @@ import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
+import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.content.Context
@@ -18,6 +19,8 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.FutureTask
@@ -53,21 +56,40 @@ class ChromiumFeaturesActivity : Activity() {
 
     private fun showFeature(feature: String) {
         if (feature == FEATURE_TOR) {
-            startActivity(Intent(this, ChromiumTorActivity::class.java)
-                .putExtra(ChromiumTorActivity.EXTRA_URL, intent.getStringExtra("aster_tor_url")))
+            startActivity(Intent(this, ChromiumTorBridgeActivity::class.java)
+                .putExtra(ChromiumTorBridgeActivity.EXTRA_URL, intent.getStringExtra("aster_tor_url")))
             finish()
             return
         }
         harness?.close()
         harness = null
+        val isChat = feature == FEATURE_AI
         val scroll = ScrollView(this).apply { setBackgroundColor(bg); isFillViewport = true }
         content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(18), dp(20), dp(22))
             setBackgroundColor(bg)
         }
-        scroll.addView(content)
-        setContentView(scroll)
+        if (isChat) {
+            // Keep the composer in a fixed bottom row. Putting the weight-based transcript
+            // inside the feature page's outer ScrollView made Android measure it at the full
+            // screen height, so the IME covered the actual Send button on phones.
+            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+            setContentView(content)
+            ViewCompat.setOnApplyWindowInsetsListener(content) { view, insets ->
+                // New Android versions draw edge-to-edge and may keep the decor at full
+                // height while the IME overlays it. Reserve the IME inset inside this root
+                // so the transcript yields space and the fixed composer remains tappable.
+                val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+                val navBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+                view.setPadding(dp(20), dp(18), dp(20), dp(22) + maxOf(imeBottom, navBottom))
+                insets
+            }
+            ViewCompat.requestApplyInsets(content)
+        } else {
+            scroll.addView(content)
+            setContentView(scroll)
+        }
         val top = row()
         top.addView(text("✦", 20f, accent, true).also {
             it.gravity = Gravity.CENTER
@@ -126,8 +148,12 @@ class ChromiumFeaturesActivity : Activity() {
         }
         content.addView(includePageContext)
         content.addView(text("Chromium asks before sharing page text. This switch controls whether each prompt includes it. The model runs on this device; page text is treated as untrusted input.", 12f, muted, false))
-        val model = getSharedPreferences("aster", MODE_PRIVATE).getString(CHROMIUM_MODEL_KEY, null)
-            ?.let(::File)?.takeIf { it.isFile && it.length() > 1024 * 1024 }
+        val prefs = getSharedPreferences("aster", MODE_PRIVATE)
+        val model = sequenceOf(
+            prefs.getString(SHARED_MODEL_KEY, null),
+            prefs.getString(CHROMIUM_MODEL_KEY, null)
+        ).filterNotNull().mapNotNull { runCatching { File(it) }.getOrNull() }
+            .firstOrNull { it.isFile && it.length() > 1024 * 1024 }
         status = text(if (model == null) "Choose a .litertlm model to begin. Inference runs on-device." else "Model available · ${model.name}", 13f, muted, false)
         content.addView(status)
         content.addView(action("Choose local model", "Import local LiteRT LM model") { chooseModel() })
@@ -138,7 +164,7 @@ class ChromiumFeaturesActivity : Activity() {
         val composer = row().apply { setPadding(0, dp(12), 0, 0) }
         input = EditText(this).apply {
             hint = "Ask Aster…"; setHintTextColor(muted); setTextColor(ink); textSize = 15f
-            setSingleLine(false); imeOptions = EditorInfo.IME_ACTION_SEND
+            setSingleLine(true); imeOptions = EditorInfo.IME_ACTION_SEND
             background = rounded(card, 18); setPadding(dp(14), dp(10), dp(14), dp(10))
             setOnEditorActionListener { _, actionId, _ ->
                 if (actionId == EditorInfo.IME_ACTION_SEND) { sendAiMessage(); true } else false
@@ -326,12 +352,16 @@ class ChromiumFeaturesActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_MODEL || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
-        val target = File(filesDir, "aster-chromium-model.litertlm")
+        val modelDirectory = (getExternalFilesDir("ai-models") ?: File(filesDir, "ai-models")).apply { mkdirs() }
+        val target = File(modelDirectory, "aster-imported-model.litertlm")
         try {
             contentResolver.openInputStream(uri)?.use { source ->
                 FileOutputStream(target).use { output -> source.copyTo(output) }
             } ?: error("Could not open selected model file")
-            getSharedPreferences("aster", MODE_PRIVATE).edit().putString(CHROMIUM_MODEL_KEY, target.absolutePath).apply()
+            getSharedPreferences("aster", MODE_PRIVATE).edit()
+                .putString(SHARED_MODEL_KEY, target.absolutePath)
+                .putString(CHROMIUM_MODEL_KEY, target.absolutePath)
+                .apply()
             loadModel(target)
         } catch (error: Exception) {
             Toast.makeText(this, "Could not import model: ${error.message}", Toast.LENGTH_LONG).show()
@@ -495,6 +525,7 @@ class ChromiumFeaturesActivity : Activity() {
         const val FEATURE_REQUEST = "feature"
         const val FEATURE_UPDATES = "updates"
         const val REQUEST_MODEL = 7201
+        private const val SHARED_MODEL_KEY = "local_ai_model_path"
         private const val CHROMIUM_MODEL_KEY = "chromium_local_ai_model_path"
     }
 }

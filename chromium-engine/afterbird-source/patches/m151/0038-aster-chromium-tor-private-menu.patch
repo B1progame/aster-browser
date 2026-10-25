@@ -1,0 +1,139 @@
+diff --git a/chrome/android/java/res/values/ids.xml b/chrome/android/java/res/values/ids.xml
+--- a/chrome/android/java/res/values/ids.xml
++++ b/chrome/android/java/res/values/ids.xml
+@@ -146,6 +146,7 @@
+     <item type="id" name="update_menu_id" />
+     <item type="id" name="new_tab_menu_id" />
+     <item type="id" name="new_incognito_tab_menu_id" />
++    <item type="id" name="aster_tor_private_window_menu_id" />
+     <item type="id" name="add_to_group_menu_id" />
+     <item type="id" name="pin_tab_menu_id" />
+     <item type="id" name="unpin_tab_menu_id" />
+diff --git a/chrome/browser/ui/android/strings/android_chrome_strings.grd b/chrome/browser/ui/android/strings/android_chrome_strings.grd
+--- a/chrome/browser/ui/android/strings/android_chrome_strings.grd
++++ b/chrome/browser/ui/android/strings/android_chrome_strings.grd
+@@ -4225,6 +4225,9 @@
+       <message name="IDS_MENU_NEW_INCOGNITO_TAB" desc="Menu item for opening a new Incognito tab that facilitates pseudononymous browsing. [CHAR_LIMIT=27]" meaning="Android menu">
+         New Incognito tab
+       </message>
++      <message name="IDS_ASTER_TOR_PRIVATE_WINDOW_MENU" desc="Menu item opening Aster’s separate Tor-routed private browsing window. [CHAR_LIMIT=27]" meaning="Android menu">
++        New private window with Tor
++      </message>
+       <message name="IDS_ACCESSIBILITY_INCOGNITO_TAB" desc="Content description for tabs that are in Incognito mode">
+         Incognito Tab
+       </message>
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
+@@ -364,6 +364,7 @@
+         if (!separateIncognitoWindow || isIncognito) {
+             modelList.add(buildNewIncognitoTabItem());
+         }
++        modelList.add(buildAsterTorPrivateWindowItem());
+ 
+         // Add to Group
+         boolean shouldShowIconBeforeItem = shouldShowIconBeforeItem();
+@@ -583,6 +584,7 @@
+         if (!separateIncognitoWindow || isIncognito) {
+             modelList.add(buildNewIncognitoTabItem());
+         }
++        modelList.add(buildAsterTorPrivateWindowItem());
+ 
+         // Tab groups
+         if (shouldShowTabGroupsParentItem(currentTab)) {
+@@ -794,6 +796,7 @@
+         if (!IncognitoUtils.shouldOpenIncognitoAsWindow() || isIncognitoShowing()) {
+             modelList.add(buildNewIncognitoTabItem());
+         }
++        modelList.add(buildAsterTorPrivateWindowItem());
+         if (shouldShowNewIncognitoWindow()) {
+             modelList.add(buildNewWindowItem());
+             modelList.add(buildNewIncognitoWindowItem());
+@@ -813,6 +816,7 @@
+         } else {
+             modelList.add(buildNewIncognitoTabItem());
+         }
++        modelList.add(buildAsterTorPrivateWindowItem());
+         modelList.add(buildSettingsItem());
+         if (shouldShowQuickDeleteItem()) modelList.add(buildQuickDeleteItem());
+     }
+@@ -898,6 +902,16 @@
+         model.set(
+                 AppMenuItemProperties.ENABLED, isIncognitoEnabled() && !isIncognitoReauthShowing());
+         return new ListItem(TabbedAppMenuItemType.NEW_INCOGNITO, model);
++    }
++
++    private ListItem buildAsterTorPrivateWindowItem() {
++        boolean showIcon = shouldShowIconBeforeItem();
++        PropertyModel model =
++                buildModelForStandardMenuItem(
++                        R.id.aster_tor_private_window_menu_id,
++                        R.string.aster_tor_private_window_menu,
++                        showIcon ? R.drawable.ic_incognito : Resources.ID_NULL);
++        return createStandardListItem(model, showIcon);
+     }
+ 
+     private boolean shouldShowAddToGroup() {
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
+@@ -4189,6 +4189,11 @@
+             boolean fromMenu,
+             @Nullable Bundle menuItemData,
+             @Nullable MotionEventInfo triggeringMotion) {
++        if (id == R.id.aster_tor_private_window_menu_id) {
++            startActivity(new android.content.Intent(
++                    this, app.aster.browser.ChromiumTorBridgeActivity.class));
++            return true;
++        }
+         final Tab currentTab = getActivityTab();
+         boolean currentTabIsNtp = isTabNtp(currentTab);
+         if (id == R.id.new_tab_menu_id) {
+diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegateUnitTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegateUnitTest.java
+--- a/chrome/android/junit/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegateUnitTest.java
++++ b/chrome/android/junit/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegateUnitTest.java
+@@ -992,6 +992,8 @@
+             expectedItems.add(item(R.id.new_incognito_tab_menu_id));
+             expectedTitles.add(item(R.string.menu_new_incognito_tab));
+         }
++        expectedItems.add(item(R.id.aster_tor_private_window_menu_id));
++        expectedTitles.add(item(R.string.aster_tor_private_window_menu));
+ 
+         expectedItems.add(
+                 item(
+@@ -1259,6 +1261,8 @@
+             expectedItems.add(item(R.id.new_incognito_tab_menu_id));
+             expectedTitles.add(item(R.string.menu_new_incognito_tab));
+         }
++        expectedItems.add(item(R.id.aster_tor_private_window_menu_id));
++        expectedTitles.add(item(R.string.aster_tor_private_window_menu));
+ 
+         expectedItems.add(item(R.id.add_to_group_menu_id));
+         expectedTitles.add(item(R.string.menu_add_tab_to_new_group));
+@@ -1388,6 +1392,8 @@
+ 
+         expectedItems.add(item(R.id.new_incognito_tab_menu_id));
+         expectedTitles.add(item(R.string.menu_new_incognito_tab));
++        expectedItems.add(item(R.id.aster_tor_private_window_menu_id));
++        expectedTitles.add(item(R.string.aster_tor_private_window_menu));
+ 
+         expectedItems.add(
+                 item(
+@@ -1633,6 +1639,8 @@
+ 
+         expectedItems.add(item(R.id.new_incognito_tab_menu_id));
+         expectedTitles.add(item(R.string.menu_new_incognito_tab));
++        expectedItems.add(item(R.id.aster_tor_private_window_menu_id));
++        expectedTitles.add(item(R.string.aster_tor_private_window_menu));
+ 
+         expectedItems.add(item(R.id.add_to_group_menu_id));
+         expectedTitles.add(item(R.string.menu_add_tab_to_new_group));
+@@ -1743,6 +1751,8 @@
+ 
+         expectedItems.add(item(R.id.new_incognito_tab_menu_id));
+         expectedTitles.add(item(R.string.menu_new_incognito_tab));
++        expectedItems.add(item(R.id.aster_tor_private_window_menu_id));
++        expectedTitles.add(item(R.string.aster_tor_private_window_menu));
+ 
+         expectedItems.add(
+                 item(

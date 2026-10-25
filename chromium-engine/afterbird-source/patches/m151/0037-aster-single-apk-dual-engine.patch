@@ -1,3 +1,4 @@
+diff --git a/chrome/android/BUILD.gn b/chrome/android/BUILD.gn
 --- a/chrome/android/BUILD.gn
 +++ b/chrome/android/BUILD.gn
 @@ -306,6 +306,7 @@
@@ -8,16 +9,18 @@
        ":chrome_app_java_resources",
        ":chrome_public_apk_template_resources",
        ":google_api_keys_java",
+diff --git a/chrome/android/java/AndroidManifest.xml b/chrome/android/java/AndroidManifest.xml
 --- a/chrome/android/java/AndroidManifest.xml
 +++ b/chrome/android/java/AndroidManifest.xml
-@@ -227,5 +227,6 @@
+@@ -225,6 +225,7 @@
+         {% endif %}
          android:networkSecurityConfig="@xml/network_security_config"
          android:appComponentFactory="org.chromium.chrome.browser.base.SplitCompatAppComponentFactory"
 +        tools:replace="android:appComponentFactory,android:zygotePreloadName,android:allowBackup,android:label"
          android:enableOnBackInvokedCallback="true"
          {% if javaless_renderers is defined %}
          android:zygotePreloadNativeLib="lib{{ library_name }}.so"
-@@ -601,6 +601,7 @@
+@@ -602,6 +603,7 @@
          <activity android:name="org.chromium.chrome.browser.ChromeTabbedActivity"
              android:theme="@style/Theme.Chromium.TabbedMode"
              android:exported="true"
@@ -25,6 +28,7 @@
              android:launchMode="standard"
              {% if is_desktop_android == "true" %}
              android:persistableMode="persistAcrossReboots"
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
 @@ -368,7 +368,7 @@
@@ -36,12 +40,16 @@
              View extensionShortcut =
                      mNewTabPageLayout.findViewById(R.id.aster_extensions_shortcut);
              extensionShortcut.setOnClickListener(
-@@ -395,12 +395,13 @@
+@@ -395,7 +395,7 @@
  
          updateSearchBoxTwoSideMargin();
          initializeLogoCoordinator();
 -        if ("app.aster.chromium".equals(mActivity.getPackageName())) {
 +        if ("app.aster.browser".equals(mActivity.getPackageName())) {
+             mNewTabPageLayout.setBackgroundColor(
+                     mActivity.getColor(R.color.aster_ntp_page_surface));
+             View quickAccessSurface = mNewTabPageLayout.findViewById(R.id.query_tiles);
+@@ -446,8 +446,9 @@
              View geckoShortcut = mNewTabPageLayout.findViewById(R.id.aster_gecko_shortcut);
              geckoShortcut.setOnClickListener(
                      view -> {
@@ -53,7 +61,7 @@
                          if (intent != null) {
                              org.chromium.chrome.browser.app.ChromeActivity activity =
                                      (org.chromium.chrome.browser.app.ChromeActivity) mActivity;
-@@ -434,12 +435,13 @@
+@@ -481,12 +482,13 @@
                      10f * mActivity.getResources().getDisplayMetrics().density);
              geckoShortcut.animate().alpha(1f).translationY(0f).setStartDelay(150).setDuration(340).start();
          }
@@ -70,7 +78,7 @@
                          if (intent == null) {
                              android.widget.Toast.makeText(
                                              mActivity,
-@@ -479,8 +481,9 @@
+@@ -567,8 +569,9 @@
              View torShortcut = mNewTabPageLayout.findViewById(R.id.aster_tor_shortcut);
              torShortcut.setOnClickListener(
                      view -> {
@@ -82,7 +90,7 @@
                          if (intent == null) {
                              android.widget.Toast.makeText(
                                              mActivity,
-@@ -514,8 +517,9 @@
+@@ -617,8 +620,9 @@
              View toolsShortcut = mNewTabPageLayout.findViewById(R.id.aster_tools_shortcut);
              toolsShortcut.setOnClickListener(
                      view -> {
@@ -94,16 +102,7 @@
                          if (intent == null) {
                              android.widget.Toast.makeText(
                                              mActivity,
-@@ -605,7 +609,7 @@
-         initializeLayoutChangeListener();
-         // Aster keeps its home surface focused on browsing instead of account promotion.
-         if (SigninFeatureMap.isEnabled(SigninFeatures.ENABLE_SEAMLESS_SIGNIN)
--                && !"app.aster.chromium".equals(mActivity.getPackageName())) {
-+                && !"app.aster.browser".equals(mActivity.getPackageName())) {
-             initializeSigninPromoCoordinator();
-         }
- 
-@@ -727,7 +731,7 @@
+@@ -828,7 +832,7 @@
          if (mIsComposeplateViewInitialized) return;
  
          mIsComposeplateViewInitialized = true;
@@ -112,6 +111,7 @@
  
  
          boolean shouldApplyWhiteBackgroundOnSearchBox =
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
 @@ -368,8 +368,7 @@
@@ -120,51 +120,34 @@
                              Intent launchIntent =
 -                                    activity.getPackageManager()
 -                                            .getLaunchIntentForPackage("app.aster.browser");
-+                                    new Intent(activity, app.aster.browser.ChromiumFeaturesActivity.class);
++                                    new android.content.Intent(activity, app.aster.browser.ChromiumFeaturesActivity.class);
                              if (launchIntent == null) {
                                  new AlertDialog.Builder(activity)
                                          .setTitle("GeckoView is not installed")
-@@ -390,8 +389,9 @@
+@@ -409,8 +408,7 @@
                              onPreferenceSelected(preference);
                              Activity activity = getActivity();
                              if (activity == null) return true;
 -                            Intent launchIntent = activity.getPackageManager()
 -                                    .getLaunchIntentForPackage("app.aster.browser");
-+                            Intent launchIntent =
-+                                    new Intent(
-+                                            activity, app.aster.browser.ChromiumFeaturesActivity.class);
++                            Intent launchIntent = new android.content.Intent(activity, app.aster.browser.ChromiumFeaturesActivity.class);
                              if (launchIntent == null) {
                                  new AlertDialog.Builder(activity)
                                          .setTitle("Aster tools unavailable")
-@@ -432,8 +432,9 @@
+@@ -451,8 +449,7 @@
                              onPreferenceSelected(preference);
                              android.app.Activity activity = getActivity();
                              if (activity == null) return true;
 -                            android.content.Intent launchIntent = activity.getPackageManager()
 -                                    .getLaunchIntentForPackage("app.aster.browser");
-+                            android.content.Intent launchIntent =
-+                                    new Intent(
-+                                            activity, app.aster.browser.ChromiumFeaturesActivity.class);
++                            android.content.Intent launchIntent = new android.content.Intent(activity, app.aster.browser.ChromiumFeaturesActivity.class);
                              if (launchIntent == null) {
                                  new android.app.AlertDialog.Builder(activity)
-                                        .setTitle("Aster issue reports unavailable")
-diff --git a/chrome/android/java/res/xml/main_preferences.xml b/chrome/android/java/res/xml/main_preferences.xml
---- a/chrome/android/java/res/xml/main_preferences.xml
-+++ b/chrome/android/java/res/xml/main_preferences.xml
-@@ -163,1 +163,6 @@
--</PreferenceScreen>
-+    <Preference
-+        android:key="aster_ai_page"
-+        android:order="35"
-+        android:title="Ask Aster about this page"
-+        android:summary="Use the local AI with optional page context"/>
-+</PreferenceScreen>
-diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
---- a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
-+++ b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
-@@ -449,2 +449,70 @@
-         IdentityManager identityManager =
-                 IdentityServicesProvider.get().getIdentityManager(getProfile());
+                                         .setTitle("Aster issue reports unavailable")
+@@ -469,6 +466,75 @@
+                             return true;
+                         });
+ 
 +        findPreference("aster_ai_page")
 +                .setOnPreferenceClickListener(
 +                        preference -> {
@@ -233,3 +216,20 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
 +                                    .show();
 +                            return true;
 +                        });
++
+         IdentityManager identityManager =
+                 IdentityServicesProvider.get().getIdentityManager(getProfile());
+         assert identityManager != null;
+diff --git a/chrome/android/java/res/xml/main_preferences.xml b/chrome/android/java/res/xml/main_preferences.xml
+--- a/chrome/android/java/res/xml/main_preferences.xml
++++ b/chrome/android/java/res/xml/main_preferences.xml
+@@ -162,4 +162,9 @@
+         android:order="35"
+         android:title="Prepare issue report"
+         android:summary="Choose safe diagnostics and open a GitHub draft"/>
++    <Preference
++        android:key="aster_ai_page"
++        android:order="35"
++        android:title="Ask Aster about this page"
++        android:summary="Use the local AI with optional page context"/>
+ </PreferenceScreen>

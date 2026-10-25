@@ -13,7 +13,7 @@ diff --git a/chrome/android/java/AndroidManifest.xml b/chrome/android/java/Andro
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
-@@ -442,8 +442,7 @@
+@@ -518,7 +518,6 @@
                          intent.putStringArrayListExtra("aster_tab_titles", titles);
                          intent.putExtra("aster_active_tab", active);
                          intent.putExtra("aster_feature", "ai");
@@ -21,11 +21,10 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageC
 -                                | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
 +                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
                                  | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                         mActivity.startActivity(intent);
-                     });
-@@ -478,9 +477,8 @@
-                             url = "";
-                         }
+                         if (activeTab != null && activeTab.getUrl() != null
+@@ -607,8 +606,7 @@
+                         intent.putStringArrayListExtra("aster_tab_titles", titles);
+                         intent.putExtra("aster_active_tab", active);
                          intent.putExtra("aster_tor_url", url);
                          intent.putExtra("aster_feature", "tor");
 -                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
@@ -33,8 +32,10 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageC
 +                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
                                  | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
                          mActivity.startActivity(intent);
-                     });
-@@ -520,5 +519,4 @@
+@@ -649,8 +647,7 @@
+                         intent.putStringArrayListExtra("aster_tabs", urls);
+                         intent.putStringArrayListExtra("aster_tab_titles", titles);
+                         intent.putExtra("aster_active_tab", active);
                          intent.putExtra("aster_feature", "tools");
 -                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
 -                                | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -44,18 +45,22 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageC
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
-@@ -381,3 +381,2 @@
-                             } else {
+@@ -398,5 +398,4 @@
+                                 launchIntent.putStringArrayListExtra("aster_tabs", urls);
+                                 launchIntent.putStringArrayListExtra("aster_tab_titles", titles);
+                                 launchIntent.putExtra("aster_active_tab", active);
 -                                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                                  activity.startActivity(launchIntent);
-@@ -421,5 +420,4 @@
+@@ -440,7 +439,6 @@
+                             launchIntent.putStringArrayListExtra("aster_tab_titles", titles);
+                             launchIntent.putExtra("aster_active_tab", active);
                              launchIntent.putExtra("aster_feature", "tools");
 -                            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
 -                                    | Intent.FLAG_ACTIVITY_CLEAR_TOP
 +                            launchIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
                                      | Intent.FLAG_ACTIVITY_SINGLE_TOP);
                              activity.startActivity(launchIntent);
-@@ -447,6 +445,5 @@
+@@ -465,6 +463,5 @@
                              launchIntent.putExtra("aster_feature", "issue");
                              launchIntent.putExtra("aster_issue_engine", "Chromium");
 -                            launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK

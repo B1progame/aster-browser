@@ -11,6 +11,8 @@ import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.IBinder
 import android.view.Gravity
 import android.view.inputmethod.EditorInfo
@@ -32,25 +34,45 @@ import androidx.webkit.WebViewFeature
 import org.torproject.jni.TorService
 import java.util.concurrent.Executor
 
-/** Isolated WebView/Chromium Tor window. A proxy failure is fail-closed. */
+/** Isolated Chromium WebView Tor window. A proxy failure is fail-closed. */
 class ChromiumTorActivity : Activity() {
-    private var tor: TorService? = null
-    private var bound = false
     private var registered = false
-    private var startedService = false
+    private var torServiceBound = false
     private var ready = false
     private var webView: WebView? = null
     private lateinit var address: EditText
     private lateinit var status: TextView
     private lateinit var progress: ProgressBar
     private val mainExecutor = Executor { command -> runOnUiThread(command) }
+    private val uiHandler = Handler(Looper.getMainLooper())
+    private var pageLoading = false
+    private val pageLoadTimeout = Runnable {
+        if (pageLoading) {
+            pageLoading = false
+            progress.visibility = android.view.View.GONE
+            status.text = "Page did not load through Tor · tap Go to retry"
+        }
+    }
+
+    // TorService runs in Aster's main process. Keep it bound while this separate-process
+    // window is foreground so Android does not freeze the Tor daemon with the background tab UI.
+    private val torServiceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            torServiceBound = true
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            torServiceBound = false
+            failClosed("Tor service disconnected. Navigation has been stopped.")
+        }
+    }
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 TorService.ACTION_STATUS -> {
                     val state = intent.getStringExtra(TorService.EXTRA_STATUS).orEmpty()
-                    if (state == TorService.STATUS_ON) attachProxy()
+                    if (state == TorService.STATUS_ON && ready) status.text = "TOR CONNECTED · SOCKS5 · Chromium WebView"
                     if (state == TorService.STATUS_OFF || state == TorService.STATUS_STOPPING) failClosed("Tor disconnected. Navigation has been stopped.")
                 }
                 TorService.ACTION_ERROR -> failClosed(intent.getStringExtra(Intent.EXTRA_TEXT) ?: "Tor could not connect.")
@@ -58,35 +80,56 @@ class ChromiumTorActivity : Activity() {
         }
     }
 
-    private val serviceConnection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            tor = (binder as? TorService.LocalBinder)?.service
-            tor?.socksPort?.let { if (it in 1..65535) attachProxy() }
-        }
-        override fun onServiceDisconnected(name: ComponentName?) { tor = null; failClosed("Tor service stopped.") }
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // This process is dedicated to the temporary Tor profile.
-        if (android.os.Build.VERSION.SDK_INT >= 28) WebView.setDataDirectorySuffix("aster_chromium_tor")
         buildUi()
+        registerStatus()
+        torServiceBound = runCatching {
+            bindService(
+                Intent(this, TorService::class.java),
+                torServiceConnection,
+                Context.BIND_AUTO_CREATE or Context.BIND_IMPORTANT
+            )
+        }.getOrDefault(false)
+        if (!torServiceBound) {
+            failClosed("Could not keep the Tor service active. No page was opened.")
+            return
+        }
+        status.text = "Preparing an isolated Tor browser…"
+        progress.visibility = android.view.View.VISIBLE
+        // Draw the native controls before asking Android to initialize its WebView provider.
+        // Provider initialization can take seconds on cold start and should not look like a
+        // black screen while the separate process is starting.
+        window.decorView.postDelayed({ initializeTorBrowser() }, 300L)
+    }
+
+    private fun initializeTorBrowser() {
+        if (isFinishing) return
+        try {
+            // This dedicated process avoids JNI collisions with Chromium's native engine.
+            if (android.os.Build.VERSION.SDK_INT >= 28 && !webViewSuffixConfigured) {
+                WebView.setDataDirectorySuffix("aster_chromium_tor")
+                webViewSuffixConfigured = true
+            }
+        } catch (error: RuntimeException) {
+            failClosed("Android could not initialize isolated WebView storage: ${error.message ?: "unknown error"}")
+            return
+        }
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
             failClosed("This Android System WebView cannot enforce a proxy. No page was loaded.")
             return
         }
-        registerStatus()
-        val serviceIntent = Intent(this, TorService::class.java)
-        try {
-            bound = bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
-            startService(serviceIntent)
-            startedService = true
-            status.text = "Building Tor circuit…"
-            progress.visibility = android.view.View.VISIBLE
-            window.decorView.postDelayed({ if (!ready && !isFinishing) failClosed("Tor connection timed out. No page was loaded outside Tor.") }, 150_000L)
-        } catch (error: Exception) {
-            failClosed("Could not start Tor: ${error.message ?: "unknown error"}")
+        // Route requests directly to Guardian's local SOCKS listener. ProxyConfig explicitly
+        // supports SOCKS; using the app's HTTP CONNECT bridge here left WebView requests
+        // pending indefinitely on the Pixel even though the bridge itself passed Tor checks.
+        val port = intent.getIntExtra(EXTRA_SOCKS_PROXY_PORT, 0)
+        if (port !in 1..65535) {
+            failClosed("No ready Tor SOCKS proxy was provided. No page was loaded outside Tor.")
+            return
         }
+        status.text = "Enforcing the Tor proxy…"
+        progress.visibility = android.view.View.VISIBLE
+        attachProxy(port)
     }
 
     private fun registerStatus() {
@@ -96,15 +139,14 @@ class ChromiumTorActivity : Activity() {
         registered = true
     }
 
-    private fun attachProxy() {
+    private fun attachProxy(port: Int) {
         if (ready || isFinishing) return
-        val port = tor?.socksPort ?: return
         if (port !in 1..65535) return
-        val config = ProxyConfig.Builder().addProxyRule("socks5://127.0.0.1:$port").build()
+        val config = ProxyConfig.Builder().addProxyRule("socks://127.0.0.1:$port").build()
         ProxyController.getInstance().setProxyOverride(config, mainExecutor, Runnable {
             if (isFinishing) return@Runnable
             ready = true
-            status.text = "TOR CONNECTED · SOCKS5 · Chromium WebView"
+            status.text = "Tor SOCKS route set · verifying route…"
             progress.visibility = android.view.View.GONE
             createWebView()
             val initial = intent.getStringExtra(EXTRA_URL).orEmpty().ifBlank { TOR_CHECK_URL }
@@ -119,7 +161,7 @@ class ChromiumTorActivity : Activity() {
         val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         address = EditText(this).apply {
             hint = "Search or enter address"; setTextColor(Color.WHITE); setHintTextColor(0xff9aa6aa.toInt()); textSize = 14f
-            singleLine = true; imeOptions = EditorInfo.IME_ACTION_GO; setPadding(dp(14), 0, dp(12), 0); background = rounded(0xff252c31.toInt(), 18)
+            isSingleLine = true; imeOptions = EditorInfo.IME_ACTION_GO; setPadding(dp(14), 0, dp(12), 0); background = rounded(0xff252c31.toInt(), 18)
             setOnEditorActionListener { _, actionId, _ -> if (actionId == EditorInfo.IME_ACTION_GO) { navigate(text.toString()); hideKeyboard(); true } else false }
         }
         bar.addView(address, LinearLayout.LayoutParams(0, dp(48), 1f))
@@ -146,6 +188,7 @@ class ChromiumTorActivity : Activity() {
     @Suppress("SetJavaScriptEnabled")
     private fun createWebView() {
         val view = WebView(this)
+        view.setBackgroundColor(Color.WHITE)
         view.settings.javaScriptEnabled = true
         view.settings.domStorageEnabled = true
         view.settings.allowFileAccess = false
@@ -159,7 +202,54 @@ class ChromiumTorActivity : Activity() {
                 return scheme != "http" && scheme != "https"
             }
             override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                uiHandler.removeCallbacks(pageLoadTimeout)
+                pageLoading = true
+                uiHandler.postDelayed(pageLoadTimeout, PAGE_LOAD_TIMEOUT_MS)
                 address.setText(url.orEmpty())
+                progress.visibility = android.view.View.VISIBLE
+                status.text = "Loading through the Tor proxy…"
+            }
+            override fun onPageFinished(view: WebView, url: String?) {
+                pageLoading = false
+                uiHandler.removeCallbacks(pageLoadTimeout)
+                progress.visibility = android.view.View.GONE
+                if (url.orEmpty().contains("check.torproject.org/api/ip")) {
+                    view.evaluateJavascript("document.body ? document.body.innerText : ''") { body ->
+                        val decoded = body.orEmpty().replace("\\\"", "\"")
+                        status.text = if (decoded.contains("\"IsTor\"", ignoreCase = true) &&
+                            decoded.contains("true", ignoreCase = true)) {
+                            "TOR VERIFIED · Chromium WebView"
+                        } else {
+                            "Tor check loaded, but did not confirm Tor routing"
+                        }
+                    }
+                } else {
+                    status.text = "Tor proxy active · page loaded"
+                }
+            }
+            override fun onReceivedError(
+                view: WebView,
+                request: WebResourceRequest,
+                error: android.webkit.WebResourceError
+            ) {
+                if (request.isForMainFrame) {
+                    pageLoading = false
+                    uiHandler.removeCallbacks(pageLoadTimeout)
+                    progress.visibility = android.view.View.GONE
+                    status.text = "Page failed · ${error.description} (${error.errorCode})"
+                }
+            }
+            override fun onReceivedHttpError(
+                view: WebView,
+                request: WebResourceRequest,
+                errorResponse: android.webkit.WebResourceResponse
+            ) {
+                if (request.isForMainFrame && errorResponse.statusCode >= 400) {
+                    pageLoading = false
+                    uiHandler.removeCallbacks(pageLoadTimeout)
+                    progress.visibility = android.view.View.GONE
+                    status.text = "Page returned HTTP ${errorResponse.statusCode}"
+                }
             }
         }
         webView = view
@@ -176,6 +266,11 @@ class ChromiumTorActivity : Activity() {
             else -> "https://$trimmed"
         }
         address.setText(url)
+        pageLoading = true
+        uiHandler.removeCallbacks(pageLoadTimeout)
+        uiHandler.postDelayed(pageLoadTimeout, PAGE_LOAD_TIMEOUT_MS)
+        progress.visibility = android.view.View.VISIBLE
+        status.text = "Loading privately through Tor…"
         webView?.loadUrl(url)
     }
 
@@ -200,6 +295,8 @@ class ChromiumTorActivity : Activity() {
     override fun onBackPressed() { if (webView?.canGoBack() == true) webView?.goBack() else finish() }
 
     override fun onDestroy() {
+        pageLoading = false
+        uiHandler.removeCallbacks(pageLoadTimeout)
         webView?.apply {
             stopLoading(); loadUrl("about:blank"); clearHistory(); clearCache(true); removeAllViews(); destroy()
         }
@@ -208,13 +305,17 @@ class ChromiumTorActivity : Activity() {
         runCatching { android.webkit.WebStorage.getInstance().deleteAllData() }
         if (ready) runCatching { ProxyController.getInstance().clearProxyOverride(mainExecutor, Runnable {}) }
         if (registered) runCatching { unregisterReceiver(receiver) }
-        if (bound) runCatching { unbindService(serviceConnection) }
-        if (startedService) runCatching { stopService(Intent(this, TorService::class.java)) }
+        if (torServiceBound) runCatching { unbindService(torServiceConnection) }
+        runCatching { stopService(Intent(this, TorService::class.java)) }
         super.onDestroy()
     }
 
     companion object {
         const val EXTRA_URL = "app.aster.browser.chromiumtor.URL"
+        const val EXTRA_SOCKS_PROXY_PORT = "app.aster.browser.chromiumtor.SOCKS_PROXY_PORT"
         private const val TOR_CHECK_URL = "https://check.torproject.org/api/ip"
+        private const val PAGE_LOAD_TIMEOUT_MS = 30_000L
+        // Android permits a WebView suffix to be set only once in each process.
+        private var webViewSuffixConfigured = false
     }
 }

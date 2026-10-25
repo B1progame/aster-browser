@@ -1,11 +1,12 @@
 diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/android/java/res/layout/new_tab_page_layout.xml
 --- a/chrome/android/java/res/layout/new_tab_page_layout.xml
 +++ b/chrome/android/java/res/layout/new_tab_page_layout.xml
-@@ -21,2 +21,3 @@
+@@ -19,3 +19,4 @@
      android:paddingTop="@dimen/toolbar_height_no_shadow"
 -    android:visibility="gone" >
 +    android:visibility="gone"
 +    android:background="@color/aster_ntp_page_surface">
+ 
 @@ -31,4 +32,9 @@
          android:layout_marginTop="20dp"
          android:layout_marginEnd="28dp"
@@ -69,12 +70,13 @@ new file mode 100644
 diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_java_resources.gni
 --- a/chrome/android/chrome_java_resources.gni
 +++ b/chrome/android/chrome_java_resources.gni
-@@ -256,1 +256,2 @@
+@@ -256,2 +256,3 @@
    "java/res/drawable/aster_ntp_extension_card.xml",
 +  "java/res/drawable/aster_ntp_hero_surface.xml",
-diff --git a/chrome/browser/ui/android/ntp/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java b/chrome/browser/ui/android/ntp/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
---- a/chrome/browser/ui/android/ntp/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
-+++ b/chrome/browser/ui/android/ntp/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+   "java/res/drawable/aster_ntp_extension_icon_background.xml",
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
 @@ -395,4 +395,51 @@
          updateSearchBoxTwoSideMargin();
          initializeLogoCoordinator();

@@ -315,6 +315,7 @@ apply_overlay() {
 
 apply_patches() {
   local patches=()
+  local normalized_patch
   while IFS= read -r -d '' p; do
     patches+=("${p}")
   done < <(find "${PATCHES_DIR}" -maxdepth 1 -name '*.patch' -print0 | sort -z)
@@ -324,17 +325,40 @@ apply_patches() {
   local p name
   for p in "${patches[@]}"; do
     name="$(basename "${p}")"
-    if git apply --check "${p}" 2>/dev/null; then
+    if [[ "${name}" == "0032-aster-tablet-desktop-sites-and-mobile-fallback.patch" ]]; then
+      local root_ui="${WORKDIR}/src/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java"
+      if grep -Fq 'DesktopSiteUtils.maybeDefaultEnableWindowSetting(mActivity, originalProfile);' "${root_ui}"; then
+        log "Patch ${name} is superseded by Chromium 151's built-in tablet desktop-site default"
+        continue
+      fi
+    fi
+    if [[ "${name}" == "0033-aster-instagram-mobile-layout.patch" ]]; then
+      local tab_impl="${WORKDIR}/src/chrome/android/java/src/org/chromium/chrome/browser/tab/TabImpl.java"
+      local root_ui="${WORKDIR}/src/chrome/android/java/src/org/chromium/chrome/browser/ui/RootUiCoordinator.java"
+      if grep -Fq 'calculateUserAgentOverrideOption(@Nullable GURL url)' "${tab_impl}" \
+          && grep -Fq 'DesktopSiteUtils.maybeDefaultEnableWindowSetting(mActivity, originalProfile);' "${root_ui}"; then
+        log "Patch ${name} is superseded by Chromium 151's URL-specific desktop/mobile choice and tablet default"
+        continue
+      fi
+    fi
+    # Patch files checked out on Windows may have CRLF endings while Chromium
+    # sources use LF. Normalize a temporary copy so `git apply` can match its
+    # context consistently across Windows and Linux hosts.
+    normalized_patch="$(mktemp)"
+    sed 's/\r$//' "${p}" > "${normalized_patch}"
+    if git apply --check "${normalized_patch}" 2>/dev/null; then
       log "Applying patch ${name}"
-      git apply --whitespace=nowarn "${p}"
-    elif git apply --reverse --check "${p}" 2>/dev/null; then
+      git apply --whitespace=nowarn "${normalized_patch}"
+    elif git apply --reverse --check "${normalized_patch}" 2>/dev/null; then
       log "Patch ${name} already applied; skipping"
-    elif git apply --3way --check "${p}" 2>/dev/null; then
+    elif git apply --3way --check "${normalized_patch}" 2>/dev/null; then
       warn "Patch ${name} needed 3-way apply (context drift) — regenerate it against the pinned tag"
-      git apply --3way --whitespace=nowarn "${p}"
+      git apply --3way --whitespace=nowarn "${normalized_patch}"
     else
+      rm -f "${normalized_patch}"
       die "Patch does not apply cleanly, reversed, or 3-way: ${p} — rebase it against the pinned tag"
     fi
+    rm -f "${normalized_patch}"
   done
   popd >/dev/null
 }
@@ -386,12 +410,15 @@ EOF
   fi
 
   pushd "${WORKDIR}/src" >/dev/null
+  local gn_cmd="${AFTERBIRD_GN_CMD:-${WORKDIR}/src/buildtools/linux64/gn}"
+  [[ -x "${gn_cmd}" ]] || gn_cmd="$(command -v gn)"
+  [[ -n "${gn_cmd}" && -x "${gn_cmd}" ]] || die "Missing executable GN binary"
   log "Running gn gen ${OUT_DIR}"
-  gn gen "${OUT_DIR}"
+  "${gn_cmd}" gen "${OUT_DIR}"
 
   # Smoke graph check: verifies the build graph can be resolved for chrome_public_apk.
   log "Running gn graph check for //chrome/android:chrome_public_apk"
-  gn desc "${OUT_DIR}" //chrome/android:chrome_public_apk deps --all >/dev/null
+  "${gn_cmd}" desc "${OUT_DIR}" //chrome/android:chrome_public_apk deps --all >/dev/null
   popd >/dev/null
 }
 
@@ -499,7 +526,6 @@ main() {
   require_cmd awk
   require_cmd git
   require_cmd gclient
-  require_cmd gn
   require_cmd install
   require_cmd rsync
   require_cmd sha256sum

@@ -1,10 +1,11 @@
 diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/android/java/res/layout/new_tab_page_layout.xml
 --- a/chrome/android/java/res/layout/new_tab_page_layout.xml
 +++ b/chrome/android/java/res/layout/new_tab_page_layout.xml
-@@ -261,3 +261,60 @@
+@@ -272,6 +272,62 @@
      </LinearLayout>
-
-+    <!-- Open Aster's separate on-device chat in the Chromium build. -->
+ 
+ 
++    <!-- Aster on-device assistant shortcut for Chromium. -->
 +    <LinearLayout
 +        android:id="@+id/aster_ai_shortcut"
 +        android:layout_width="match_parent"
@@ -60,8 +61,9 @@ diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/and
 +            android:textSize="26sp"
 +            android:textStyle="bold" />
 +    </LinearLayout>
-+
-      <!-- Composeplate / "AI Mode" -->
+     <!-- Composeplate / "AI Mode" -->
+     <ViewStub
+         android:id="@+id/composeplate_view_stub"
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java

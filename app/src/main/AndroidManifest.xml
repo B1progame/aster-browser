@@ -44,7 +44,15 @@
             android:configChanges="density|keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|uiMode"
             android:label="Aster Chromium Tools" />
         <activity
+            android:name=".ChromiumTorBridgeActivity"
+            android:exported="false"
+            android:launchMode="standard"
+            android:taskAffinity="app.aster.shared"
+            android:configChanges="density|keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|uiMode"
+            android:label="Connecting to Tor" />
+        <activity
             android:name=".ChromiumTorActivity"
+            android:process=":chromiumtorprivate"
             android:exported="false"
             android:launchMode="standard"
             android:taskAffinity="app.aster.shared"

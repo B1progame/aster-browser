@@ -1,12 +1,12 @@
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
-@@ -1628,3 +1628,4 @@ public class ChromeTabbedActivity extends ChromeActivity
-         TraceEvent.begin("ChromeTabbedActivity.onNewIntentWithNative");
-         super.onNewIntentWithNative(intent);
-+        handleAsterTabHandoff(intent);
-         if (!IntentHandler.shouldIgnoreIntent(intent, this, /* isCustomTab= */ false)) {
-@@ -1649,1 +1650,41 @@ public class ChromeTabbedActivity extends ChromeActivity
-     private void maybeHandleOpenTabGroupIntent(Intent intent) {
+@@ -1898,4 +1898,5 @@ public class ChromeTabbedActivity extends ChromeActivity
+             TraceEvent.begin("ChromeTabbedActivity.onNewIntentWithNative");
+ 
+             super.onNewIntentWithNative(intent);
++            handleAsterTabHandoff(intent);
+             if (!IntentHandler.shouldIgnoreIntent(intent, this, /* isCustomTab= */ false)) {
+@@ -1926,1 +1926,41 @@ public class ChromeTabbedActivity extends ChromeActivity
 +    /** Imports the portable normal-tab portion of a session from Aster GeckoView. */
 +    private void handleAsterTabHandoff(Intent intent) {
 +        java.util.ArrayList<String> urls = intent.getStringArrayListExtra("aster_tabs");
@@ -47,6 +47,9 @@
 +        intent.removeExtra("aster_active_tab");
 +    }
 +
-@@ -2189,1 +2229,2 @@ public class ChromeTabbedActivity extends ChromeActivity
-         mTabModelOrchestrator.restoreTabs(activeTabBeingRestored);
-+        handleAsterTabHandoff(intent);
+     private void maybeHandleOpenTabGroupIntent(Intent intent) {
+@@ -2525,2 +2525,3 @@ public class ChromeTabbedActivity extends ChromeActivity
+             mTabModelOrchestrator.restoreTabs(activeTabBeingRestored);
++            handleAsterTabHandoff(intent);
+ 
++            handleAsterTabHandoff(intent);

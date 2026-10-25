@@ -105,8 +105,8 @@ diff --git a/chrome/browser/resources/extensions/item_list.css b/chrome/browser/
 index 0000000..0000000 100644
 --- a/chrome/browser/resources/extensions/item_list.css
 +++ b/chrome/browser/resources/extensions/item_list.css
-@@ -118,6 +118,9 @@ managed-footnote {
- @media (max-width: 1000px) {
+@@ -104,6 +104,9 @@ managed-footnote {
+ @media (max-width: 600px) {
    .items-container,
    #content-wrapper {
 +    /* Leave room for readable extension names, state chips, and touch
