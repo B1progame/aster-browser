@@ -4,7 +4,7 @@ Aster is a single Android app package containing both GeckoView and the experime
 
 ## Current candidate
 
-The local source is version **5.0.0**; GitHub still lists **2.2.0** as the latest release. The current x86_64 combined APK was rebuilt and exercised on the Pixel emulator for selected AI and browser UI flows. It is still a test candidate: Chromium's Tor window did not render a page in the last end-to-end check.
+The local source is version **5.0.0**; GitHub still lists **2.2.0** as the latest release. The current x86_64 combined APK was rebuilt and exercised on the Pixel emulator for selected AI and browser UI flows. The Chromium rebuild removed an unsafe YouTube JavaScript injection that could crash on normal web pages; YouTube's consent page rendered in a follow-up check. Video playback, fullscreen, Instagram Reels, and Chromium Tor still need verification.
 
 - `AsterBrowser-v5.0.0-Android-arm64.apk` — an older ARM64 artifact in `dist`; it predates the current Chromium Tor menu patch and is not a current Quest build.
 - `AsterBrowser-v5.0.0-Android-x86_64-tor-menu-ai-test.apk` — current x86_64 emulator test candidate, not a release artifact.
