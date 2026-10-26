@@ -1238,6 +1238,13 @@ class MainActivity : Activity() {
         val includeApp = option("App and engine", "Aster version and active engine", true)
         val includeDevice = option("Android and screen", "Android release and display size", true)
         val includeSite = option("Website origin", if (privateTab) "Off for this private tab" else "Host only · no path or search text", !privateTab && !origin.isNullOrBlank())
+        val recentCrash = CrashDiagnostics.summary(application)
+        val includeCrash = option(
+            "Recent crash summary",
+            recentCrash?.let { "Optional · app-owned frames only, no logs or error message" } ?: "No recent crash summary is available",
+            false
+        )
+        includeCrash.isEnabled = recentCrash != null
         val includeScreenshot = option("Screenshot", if (screenshotUnavailable) "Unavailable from this engine or screen" else "Address field is always covered", capture != null)
         includeScreenshot.isEnabled = capture != null
         val includePage = option("Show website pixels", "May reveal account names, messages, or other page content", false)
@@ -1293,6 +1300,7 @@ class MainActivity : Activity() {
                 origin.takeIf { includeSite.isChecked },
                 includeApp.isChecked,
                 includeDevice.isChecked,
+                recentCrash.takeIf { includeCrash.isChecked },
                 safeShot,
                 includePage.isChecked
             )
@@ -1327,6 +1335,7 @@ class MainActivity : Activity() {
         origin: String?,
         includeApp: Boolean,
         includeDevice: Boolean,
+        crashSummary: String?,
         screenshot: Bitmap?,
         includesPagePixels: Boolean
     ) {
@@ -1353,7 +1362,7 @@ class MainActivity : Activity() {
         }
         if (includesPagePixels) content.addView(label("Website pixels are visible in this image. Check the preview for private information before continuing.", 11f, 0xffffc47d.toInt(), true).apply { setPadding(0, 0, 0, dp(9)) })
         val previewText = TextView(this).apply {
-            text = buildIssueBody(details, engineName, origin, includeApp, includeDevice, screenshot != null, includesPagePixels, null)
+            text = buildIssueBody(details, engineName, origin, includeApp, includeDevice, crashSummary, screenshot != null, includesPagePixels, null)
             textSize = 12f; setTextColor(muted); setTextIsSelectable(true); setPadding(dp(12), dp(10), dp(12), dp(10)); background = shape(raised, 14)
         }
         content.addView(ScrollView(this).apply { addView(previewText) }, LinearLayout.LayoutParams(-1, dp(210)))
@@ -1388,7 +1397,7 @@ class MainActivity : Activity() {
                         } ?: error("Could not save screenshot")
                         "Downloads/Aster issue reports/$screenshotName"
                     } else null
-                    val report = buildIssueBody(details, engineName, origin, includeApp, includeDevice, screenshot != null, includesPagePixels, screenshotPath)
+                    val report = buildIssueBody(details, engineName, origin, includeApp, includeDevice, crashSummary, screenshot != null, includesPagePixels, screenshotPath)
                     val reportName = "$base.md"
                     saveIssueDownload(reportName, "text/markdown") { out -> out.write(report.toByteArray(Charsets.UTF_8)) }
                         ?: error("Could not save the report")
@@ -1418,6 +1427,7 @@ class MainActivity : Activity() {
         origin: String?,
         includeApp: Boolean,
         includeDevice: Boolean,
+        crashSummary: String?,
         hasScreenshot: Boolean,
         includesPagePixels: Boolean,
         screenshotPath: String?
@@ -1437,6 +1447,12 @@ class MainActivity : Activity() {
             appendLine("- Display: ${display.widthPixels} × ${display.heightPixels} px; ${resources.configuration.screenWidthDp} × ${resources.configuration.screenHeightDp} dp")
         }
         if (origin != null) appendLine("- Website origin: $origin")
+        if (crashSummary != null) {
+            appendLine("- Recent crash summary (selected by the user):")
+            appendLine("```text")
+            appendLine(crashSummary.take(CrashSummaryFormatter.MAX_CHARS))
+            appendLine("```")
+        }
         if (hasScreenshot) {
             appendLine("- Screenshot: ${screenshotPath?.let { "attach `$it` from Downloads/Aster issue reports" } ?: "prepared for Downloads/Aster issue reports"}")
             appendLine("- Website pixels: ${if (includesPagePixels) "visible; reviewed in Aster" else "masked"}")

@@ -10,7 +10,14 @@ symbol_level = 0
 blink_symbol_level = 0
 dcheck_always_on = false
 chrome_public_manifest_package = "app.aster.browser"
-android_override_version_code = "800000000"
-android_override_version_name = "4.0.0"
+android_override_version_code = "805000000"
+android_override_version_name = "5.0.0"
 treat_warnings_as_errors = false
 disable_android_lint = true
+android_static_analysis = "off"
+
+# Meta/Facebook and Instagram Reels currently serve H.264/AAC MP4 streams.
+# Chromium's default codec set omits these, so enable the same codec capability
+# needed for common social video playback. Distribution is patent/licensing-sensitive.
+proprietary_codecs = true
+ffmpeg_branding = "Chrome"

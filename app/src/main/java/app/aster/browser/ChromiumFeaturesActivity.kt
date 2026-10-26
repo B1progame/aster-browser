@@ -178,15 +178,61 @@ class ChromiumFeaturesActivity : Activity() {
 
     private fun showIssue() {
         heading("Prepare an issue", "Choose what to share")
-        content.addView(text("No page URL, cookies, or browsing history is attached automatically.", 14f, muted, false))
+        content.addView(text("Review a safe Chromium report before opening GitHub. No page URL, cookies, or browsing history is attached.", 14f, muted, false))
+        val title = EditText(this).apply {
+            hint = "Short issue title"; setHintTextColor(muted); setTextColor(ink); setSingleLine(true)
+            setText("Chromium browser issue")
+            background = rounded(card, 16); setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+        content.addView(title, LinearLayout.LayoutParams(-1, dp(50)).apply { topMargin = dp(14) })
         val details = EditText(this).apply {
             hint = "Describe what happened"; setHintTextColor(muted); setTextColor(ink)
             minLines = 4; gravity = Gravity.TOP; background = rounded(card, 16); setPadding(dp(12), dp(12), dp(12), dp(12))
+            filters = arrayOf(android.text.InputFilter.LengthFilter(1800))
         }
         content.addView(details, LinearLayout.LayoutParams(-1, dp(150)).apply { topMargin = dp(16) })
-        content.addView(action("Continue to GitHub", "Open Aster issue draft") {
-            val body = Uri.encode(details.text.toString())
-            launchChromiumUrl("https://github.com/B1progame/aster-browser/issues/new?body=$body")
+        val crashSummary = CrashDiagnostics.summary(application)
+        val includeCrash = CheckBox(this).apply {
+            text = if (crashSummary == null) "No recent crash summary available" else "Include recent crash summary (app frames only)"
+            setTextColor(ink); buttonTintList = android.content.res.ColorStateList.valueOf(accent)
+            isEnabled = crashSummary != null
+        }
+        content.addView(includeCrash, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        content.addView(action("Review report", "Review privacy-safe Chromium issue draft") {
+            val cleanTitle = CrashSummaryFormatter.sanitizeIssueText(title.text.toString()).trim().take(100)
+            val cleanDetails = CrashSummaryFormatter.sanitizeIssueText(details.text.toString()).trim().take(1800)
+            if (cleanTitle.isBlank() || cleanDetails.isBlank()) {
+                Toast.makeText(this, "Add a title and describe what happened", Toast.LENGTH_SHORT).show()
+                return@action
+            }
+            val report = buildString {
+                appendLine("## What happened")
+                appendLine(cleanDetails)
+                appendLine()
+                appendLine("## Diagnostics")
+                appendLine("- Engine: Chromium")
+                appendLine("- Aster version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                appendLine("- Android API: ${android.os.Build.VERSION.SDK_INT}")
+                if (includeCrash.isChecked && crashSummary != null) {
+                    appendLine("- Recent crash summary (selected by the user):")
+                    appendLine("```text")
+                    appendLine(crashSummary.take(CrashSummaryFormatter.MAX_CHARS))
+                    appendLine("```")
+                }
+                appendLine()
+                appendLine("## Privacy")
+                appendLine("No page URL, path, query, cookies, passwords, browsing history, or raw browser logs were included.")
+            }.take(3800)
+            AlertDialog.Builder(this)
+                .setTitle(cleanTitle)
+                .setMessage(report)
+                .setNegativeButton("Back", null)
+                .setPositiveButton("Open GitHub draft") { _, _ ->
+                    val draft = Uri.parse("https://github.com/B1progame/aster-browser/issues/new")
+                        .buildUpon().appendQueryParameter("title", cleanTitle).appendQueryParameter("body", report).build()
+                    launchChromiumUrl(draft.toString())
+                }
+                .show()
         })
     }
 

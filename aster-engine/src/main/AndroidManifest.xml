@@ -8,6 +8,15 @@
         android:fullBackupContent="true"
         android:taskAffinity="app.aster.shared"
         android:resizeableActivity="true">
+        <provider
+            android:name="app.aster.browser.TorRouteProvider"
+            android:authorities="${applicationId}.tor-route"
+            android:exported="false" />
+        <provider
+            android:name="app.aster.browser.AsterCrashInitProvider"
+            android:authorities="${applicationId}.aster-crash-init"
+            android:exported="false"
+            android:initOrder="100" />
         <meta-data
             android:name="com.oculus.supportedDevices"
             android:value="quest2|questpro|quest3|quest3s" />

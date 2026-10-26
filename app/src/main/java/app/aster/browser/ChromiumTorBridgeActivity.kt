@@ -19,7 +19,7 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import org.torproject.jni.TorService
 
-/** Starts Tor in the app process, then hands its ready HTTP proxy port to isolated WebView process. */
+/** Starts Tor in the app process, then hands its SOCKS listener to the isolated Chromium Tor process. */
 class ChromiumTorBridgeActivity : Activity() {
     private var tor: TorService? = null
     private var bound = false
@@ -123,12 +123,12 @@ class ChromiumTorBridgeActivity : Activity() {
 
     private fun launchIfReady() {
         if (launched || latestStatus != TorService.STATUS_ON) return
-        val port = tor?.socksPort ?: return
-        if (port !in 1..65535) return
+        val socksPort = tor?.socksPort ?: return
+        if (socksPort !in 1..65535) return
         launched = true
         handler.removeCallbacks(timeout)
         startActivity(Intent(this, ChromiumTorActivity::class.java)
-            .putExtra(ChromiumTorActivity.EXTRA_SOCKS_PROXY_PORT, port)
+            .putExtra(ChromiumTorActivity.EXTRA_SOCKS_PORT, socksPort)
             .putExtra(ChromiumTorActivity.EXTRA_URL, intent.getStringExtra(EXTRA_URL)))
         finish()
     }
