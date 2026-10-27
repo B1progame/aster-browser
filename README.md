@@ -2,14 +2,15 @@
 
 Aster is a single Android app package containing both GeckoView and the experimental Chromium/Afterbird browser engine. Choose the engine from Aster's browser settings; each engine keeps its own profile and site data.
 
-## Current candidate
+## v5.0.0 release verification
 
-The local source is version **5.0.0**; GitHub still lists **2.2.0** as the latest release. The current x86_64 combined APK includes the Chrome H.264/AAC codec configuration and was installed on Android Studio's Pixel 10a and Medium Tablet x86_64 AVDs. Instagram's Reels page rendered a video frame and Chromium created its H.264 decoder; the signed-out account still receives the site's “Watch this reel in the app” gate, so continuous Reels playback is not verified. YouTube's desktop page and a video frame rendered on the tablet; load-time benchmarking and fullscreen are unverified. Aster's report flow offers a user-selected, privacy-safe crash/ANR summary. One earlier tablet run recorded a Chromium main-process ANR (479 MB RSS); the current Pixel smoke run had no Aster crash or ANR. Chromium Tor pages still time out, and the current ARM64 APK is being rebuilt from the updated source.
+The v5.0.0 release contains one package, `app.aster.browser`, with GeckoView and Chromium. It includes separate ABI assets: `AsterBrowser-v5.0.0-Android-arm64.apk` and `AsterBrowser-v5.0.0-Android-x86_64.apk`.
 
-- `AsterBrowser-v5.0.0-Android-arm64.apk` — an older ARM64 artifact in `dist`; it predates the current Chromium Tor menu patch and is not a current Quest build.
-- `AsterBrowser-v5.0.0-Android-x86_64-tor-menu-ai-test.apk` — current x86_64 emulator test candidate, not a release artifact.
+On 2026-10-27, the x86_64 APK was installed on the Android Studio Pixel 10a emulator (Android 17). Chromium rendered `example.com`; switching from Chromium to Gecko and back stayed in the same Android task, and the Gecko tab list contained the transferred `https://example.com/` URL. A cold relaunch restored 10 Chromium standard tabs, while the switcher had shown 14 before force-stop, so complete tab restoration is not verified. No Aster fatal exception or ANR appeared in the tested launch/switch flow.
 
-Both package formats use package ID `app.aster.browser` and include Gecko and Chromium. The x86_64 APK is built from the pinned Chromium source and contains the current staged changes. The ARM64 output is being resumed from its saved Chromium build tree; it has no current APK yet. Quest 3S compatibility and current ARM64 behavior remain unverified, so v5 is not yet published.
+The ARM64 APK was built from the same pinned Chromium checkout and staged Aster runtime. Its manifest reports package `app.aster.browser`, version 5.0.0, ABI `arm64-v8a`, and Quest device metadata `quest2|questpro|quest3|quest3s`. Its signing certificate matches the x86_64 APK and the existing v2.2.0 signing key. This is a manifest/build check only: the ARM64 APK was not installed on a physical ARM64 device or Quest 3S.
+
+Known issues remain open. Chromium Tor page rendering did not pass the previous end-to-end check. In this Pixel run, the local AI model reached its ready state, but a prompt produced no visible answer after 90 seconds; Android also logged memory-pressure kills of Chromium renderer processes. Instagram Reels and YouTube desktop/fullscreen were not retested in this release pass. v5 does not claim full desktop Chrome extension compatibility or complete Gecko feature parity in Chromium. See [`docs/chromium-extension-engine.md`](docs/chromium-extension-engine.md) for test details and limitations.
 
 ## Browser features
 
@@ -38,7 +39,7 @@ chromium-engine/afterbird-source/ci/chromium_android_pipeline.sh --full-build
 
 The pipeline stages the Gecko AAR/runtime into Chromium and builds the combined APK; its exact checkout and dependencies are documented under [`chromium-engine/afterbird-source/`](chromium-engine/afterbird-source/). The checked-in Chromium directory is an overlay and patch set, not a complete Chromium source checkout.
 
-Before publishing, verify the APK manifest, ABI, signing certificate, install/update behavior, engine switch, Tor routing, updater in both engine surfaces, and representative browsing on supported devices. H.264/AAC distribution is patent/licensing-sensitive. Test the current ARM64 artifact on an ARM64 device before claiming runtime verification. See [`docs/ON_DEVICE_AI.md`](docs/ON_DEVICE_AI.md) and [`docs/chromium-extension-engine.md`](docs/chromium-extension-engine.md) for implementation details and limitations.
+The v5 release has not verified Chromium Tor page rendering, full AI inference, every-tab cold restoration, update installation from v2.2.0, or Quest 3S controller/runtime behavior. H.264/AAC distribution is patent/licensing-sensitive. See [`docs/ON_DEVICE_AI.md`](docs/ON_DEVICE_AI.md) and [`docs/chromium-extension-engine.md`](docs/chromium-extension-engine.md) for implementation details and limitations.
 
 ## Meta Quest
 
