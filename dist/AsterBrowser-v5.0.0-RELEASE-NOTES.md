@@ -6,6 +6,8 @@ Aster v5.0.0 is one Android package (`app.aster.browser`) containing Chromium an
 - `AsterBrowser-v5.0.0-Android-x86_64.apk` — Android Studio x86_64 emulators.
 - `AsterBrowser-v5.0.0-SHA256SUMS.txt` — SHA-256 checksums for both APKs.
 
+The repository [README feature tour](https://github.com/B1progame/aster-browser/blob/main/README.md#screenshots-and-feature-tour) includes emulator screenshots of the home screen, tab switcher, extension manager, and per-site extension controls. The [roadmap](https://github.com/B1progame/aster-browser/blob/main/docs/ROADMAP.md) proposes browser-data import and other next steps.
+
 ## Verification
 
 On 2026-10-27, the x86_64 APK was installed on Android Studio's Pixel 10a emulator running Android 17. Chromium rendered `https://example.com/`. Switching Chromium → GeckoView → Chromium stayed inside the same Android task; GeckoView displayed the transferred example.com URL. The Chromium tab switcher showed 14 tabs before a force-stop; relaunch restored 10, so full tab restoration is not verified. No Aster fatal exception or ANR was observed in the tested launch/navigation/engine-switch flow.
