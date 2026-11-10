@@ -53,6 +53,7 @@ object CrashDiagnostics {
     private const val SUMMARY_TIME_KEY = "safe_crash_summary_time"
     private const val EXIT_TIME_KEY = "safe_crash_exit_time"
     private val initialized = AtomicBoolean(false)
+    private val summaryLock = Any()
 
     fun summary(context: Context): String? =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -61,23 +62,31 @@ object CrashDiagnostics {
     fun initialize(context: Context) {
         if (!initialized.compareAndSet(false, true)) return
         val appContext = context.applicationContext
-        recordLastSystemExit(appContext)
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             recordUncaught(appContext, error)
             previous?.uncaughtException(thread, error) ?: Process.killProcess(Process.myPid())
         }
+        // This provider runs before either engine's Activity. ActivityManager is
+        // a synchronous Binder call and may stall while Android handles the last
+        // process exit. Diagnostics must never hold up a subsequent launch.
+        Thread({ recordLastSystemExit(appContext) }, "aster-exit-diagnostics").apply {
+            isDaemon = true
+            start()
+        }
     }
 
     fun recordUncaught(context: Context, error: Throwable) {
         runCatching {
-            val frames = error.stackTrace.asSequence()
-                .filter { it.className.startsWith("${context.packageName}.") }
-                .take(5).map { it.toString() }.toList()
-            val safe = CrashSummaryFormatter.formatUncaught(error.javaClass.name, frames, context.packageName)
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .edit().putString(SUMMARY_KEY, safe)
-                .putLong(SUMMARY_TIME_KEY, System.currentTimeMillis()).commit()
+            synchronized(summaryLock) {
+                val frames = error.stackTrace.asSequence()
+                    .filter { it.className.startsWith("${context.packageName}.") }
+                    .take(5).map { it.toString() }.toList()
+                val safe = CrashSummaryFormatter.formatUncaught(error.javaClass.name, frames, context.packageName)
+                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                    .edit().putString(SUMMARY_KEY, safe)
+                    .putLong(SUMMARY_TIME_KEY, System.currentTimeMillis()).commit()
+            }
         }
     }
 
@@ -99,24 +108,29 @@ object CrashDiagnostics {
                     ApplicationExitInfo.REASON_LOW_MEMORY
                 ) }
                 .maxByOrNull { it.timestamp }
-            val edit = prefs.edit().putLong(EXIT_TIME_KEY, latestExit)
-            if (failure != null) {
-                val summaryTime = prefs.getLong(SUMMARY_TIME_KEY, 0L)
-                // A Java handler writes its private frame summary immediately before Android
-                // records the same process exit. Keep that better report instead of replacing
-                // it with the generic system category.
-                if (failure.timestamp - summaryTime > 5_000L) {
-                    val category = when (failure.reason) {
-                        ApplicationExitInfo.REASON_CRASH -> "Java crash"
-                        ApplicationExitInfo.REASON_CRASH_NATIVE -> "native crash"
-                        ApplicationExitInfo.REASON_ANR -> "app not responding"
-                        else -> "low memory termination"
+            // The system query stays outside this lock. Compare and write the
+            // summary together so an older exit cannot replace a crash recorded
+            // by the uncaught handler while this background query was in flight.
+            synchronized(summaryLock) {
+                val edit = prefs.edit().putLong(EXIT_TIME_KEY, latestExit)
+                if (failure != null) {
+                    val summaryTime = prefs.getLong(SUMMARY_TIME_KEY, 0L)
+                    // A Java handler writes its private frame summary immediately before Android
+                    // records the same process exit. Keep that better report instead of replacing
+                    // it with the generic system category.
+                    if (failure.timestamp - summaryTime > 5_000L) {
+                        val category = when (failure.reason) {
+                            ApplicationExitInfo.REASON_CRASH -> "Java crash"
+                            ApplicationExitInfo.REASON_CRASH_NATIVE -> "native crash"
+                            ApplicationExitInfo.REASON_ANR -> "app not responding"
+                            else -> "low memory termination"
+                        }
+                        edit.putString(SUMMARY_KEY, CrashSummaryFormatter.formatProcessExit(category))
+                            .putLong(SUMMARY_TIME_KEY, failure.timestamp)
                     }
-                    edit.putString(SUMMARY_KEY, CrashSummaryFormatter.formatProcessExit(category))
-                        .putLong(SUMMARY_TIME_KEY, failure.timestamp)
                 }
+                edit.commit()
             }
-            edit.apply()
         }
     }
 }
