@@ -1,6 +1,7 @@
 package app.aster.browser;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.io.InputStream;
@@ -60,15 +61,20 @@ public final class TorSocksHttpProxyTest {
                 assertTrue(request != null);
                 assertTrue(request.startsWith("GET /path?q=one HTTP/1.1\r\n"));
                 assertTrue(!request.toLowerCase().contains("proxy-connection:"));
-                socks.tunnelOutput.write(("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n"
-                        + "Connection: close\r\n\r\nok")
+                // Cross multiple relay buffers; the Android-29-compatible copy
+                // must preserve all bytes, including the final partial buffer.
+                byte[] expected = new byte[32 * 1024 + 3];
+                for (int i = 0; i < expected.length; i++) expected[i] = (byte) (i % 251);
+                socks.tunnelOutput.write(("HTTP/1.1 200 OK\r\nContent-Length: " + expected.length + "\r\n"
+                        + "Connection: close\r\n\r\n")
                         .getBytes(StandardCharsets.US_ASCII));
+                socks.tunnelOutput.write(expected);
                 socks.tunnelOutput.flush();
                 socks.responseReady.countDown();
                 assertTrue(readHeaders(input).startsWith("HTTP/1.1 200 OK"));
-                byte[] body = new byte[2];
+                byte[] body = new byte[expected.length];
                 readFully(input, body);
-                assertEquals("ok", new String(body, StandardCharsets.US_ASCII));
+                assertArrayEquals(expected, body);
             }
         }
     }
@@ -164,12 +170,13 @@ public final class TorSocksHttpProxyTest {
                 }
                 byte[] port = new byte[2];
                 readFully(input, port);
-                target.offer(host + ":" + (((port[0] & 0xff) << 8) | (port[1] & 0xff)));
+                String destination = host + ":" + (((port[0] & 0xff) << 8) | (port[1] & 0xff));
+                target.offer(destination);
                 output.write(new byte[] {5, 0, 0, 1, 127, 0, 0, 1, 0, 80});
                 output.flush();
                 tunnelInput = input;
                 tunnelOutput = output;
-                if ("check.torproject.org:443".equals(target.peek())) {
+                if ("check.torproject.org:443".equals(destination)) {
                     byte[] ping = new byte[4];
                     readFully(input, ping);
                     output.write("pong".getBytes(StandardCharsets.US_ASCII));

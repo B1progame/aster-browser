@@ -180,23 +180,27 @@ class ChromiumTorActivity : Activity() {
             failClosed("Tor provided an invalid local proxy. No page was loaded outside Tor.")
             return
         }
-        val config = ProxyConfig.Builder().apply {
-            removeImplicitRules()
-            TorProxyRoutePlan.forLocalHttpProxyPort(localProxyPort).forEach { rule ->
-                addProxyRule(rule.proxyUrl, rule.schemeFilter)
-            }
-        }.build()
-        ProxyController.getInstance().setProxyOverride(config, mainExecutor, Runnable {
-            if (isFinishing) return@Runnable
-            ready = true
-            status.text = "Tor-only proxy set · verifying…"
-            progress.visibility = android.view.View.GONE
-            createWebView()
-            uiHandler.removeCallbacks(routeRefresh)
-            uiHandler.post(routeRefresh)
-            val initial = intent.getStringExtra(EXTRA_URL).orEmpty().ifBlank { TOR_CHECK_URL }
-            navigate(initial)
-        })
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
+            val config = ProxyConfig.Builder().apply {
+                removeImplicitRules()
+                TorProxyRoutePlan.forLocalHttpProxyPort(localProxyPort).forEach { rule ->
+                    addProxyRule(rule.proxyUrl, rule.schemeFilter)
+                }
+            }.build()
+            ProxyController.getInstance().setProxyOverride(config, mainExecutor, Runnable {
+                if (isFinishing) return@Runnable
+                ready = true
+                status.text = "Tor-only proxy set · verifying…"
+                progress.visibility = android.view.View.GONE
+                createWebView()
+                uiHandler.removeCallbacks(routeRefresh)
+                uiHandler.post(routeRefresh)
+                val initial = intent.getStringExtra(EXTRA_URL).orEmpty().ifBlank { TOR_CHECK_URL }
+                navigate(initial)
+            })
+        } else {
+            failClosed("This Android System WebView cannot enforce a proxy. No page was loaded.")
+        }
     }
 
     private fun buildUi() {
@@ -512,7 +516,11 @@ class ChromiumTorActivity : Activity() {
         torHttpProxy = null
         runCatching { CookieManager.getInstance().removeAllCookies(null); CookieManager.getInstance().flush() }
         runCatching { android.webkit.WebStorage.getInstance().deleteAllData() }
-        if (ready) runCatching { ProxyController.getInstance().clearProxyOverride(mainExecutor, Runnable {}) }
+        if (ready) runCatching {
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
+                ProxyController.getInstance().clearProxyOverride(mainExecutor, Runnable {})
+            }
+        }
         if (registered) runCatching { unregisterReceiver(receiver) }
         if (torServiceBound) runCatching { unbindService(torServiceConnection) }
         runCatching { stopService(Intent(this, TorService::class.java)) }
