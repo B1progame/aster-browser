@@ -78,12 +78,14 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageC
                          if (intent == null) {
                              android.widget.Toast.makeText(
                                              mActivity,
-@@ -567,8 +569,9 @@
+@@ -567,10 +569,9 @@
              View torShortcut = mNewTabPageLayout.findViewById(R.id.aster_tor_shortcut);
              torShortcut.setOnClickListener(
                      view -> {
--                        android.content.Intent intent = mActivity.getPackageManager()
--                                .getLaunchIntentForPackage("app.aster.browser");
+-                        android.content.Intent intent = new android.content.Intent();
+-                        intent.setClassName(
+-                                "app.aster.browser",
+-                                "app.aster.browser.ChromiumTorBridgeActivity");
 +                        android.content.Intent intent =
 +                                new android.content.Intent(
 +                                        mActivity, app.aster.browser.ChromiumFeaturesActivity.class);
