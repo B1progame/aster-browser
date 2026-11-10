@@ -23,7 +23,7 @@ mkdir -p "$TOOLS_DIR" "$CHROMIUM_DIR"
 
 printf '\nInstalling system build tools. A sudo password may be requested.\n'
 sudo apt-get update
-sudo apt-get install -y ca-certificates curl git openjdk-17-jdk python3 rsync unzip xz-utils zip
+sudo apt-get install -y ca-certificates curl file git openjdk-17-jdk python3 rsync unzip xz-utils zip
 
 if [ ! -x "$TOOLS_DIR/gradle-9.6.0/bin/gradle" ]; then
     curl -fL --retry 3 https://services.gradle.org/distributions/gradle-9.6.0-bin.zip -o "$TOOLS_DIR/gradle.zip"
