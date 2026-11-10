@@ -13,14 +13,17 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 class SinglePackageVariantTests(unittest.TestCase):
     def test_release_variants_use_the_gecko_update_package(self):
+        app = (ROOT.parents[1] / "app/build.gradle.kts").read_text()
+        code = re.search(r'versionCode = (\d+)', app).group(1)
+        version = re.search(r'versionName = "([^"]+)"', app).group(1)
         for variant in ("aster-x64", "aster-arm64"):
             args = (ROOT / ".build/args" / f"{variant}.gn").read_text()
             self.assertRegex(
                 args,
                 r'chrome_public_manifest_package\s*=\s*"app\.aster\.browser"',
             )
-            self.assertRegex(args, r'android_override_version_code\s*=\s*"800000000"')
-            self.assertRegex(args, r'android_override_version_name\s*=\s*"4\.0\.0"')
+            self.assertRegex(args, rf'android_override_version_code\s*=\s*"{code}"')
+            self.assertRegex(args, rf'android_override_version_name\s*=\s*"{re.escape(version)}"')
 
     def test_pipeline_stages_the_gecko_engine_for_both_release_abis(self):
         pipeline = (ROOT / "ci/chromium_android_pipeline.sh").read_text()
@@ -120,7 +123,9 @@ class SinglePackageVariantTests(unittest.TestCase):
                 self.assertIn(f'"aster_feature", "{feature}"', combined)
                 self.assertIn(f'FEATURE_{feature.upper()} = "{feature}"', activity)
         self.assertIn("ChromiumFeaturesActivity.class", combined)
-        self.assertIn("ChromiumTorActivity::class.java", activity)
+        self.assertIn("ChromiumTorBridgeActivity::class.java", activity)
+        bridge_activity = (root / "app/src/main/java/app/aster/browser/ChromiumTorBridgeActivity.kt").read_text()
+        self.assertIn("ChromiumTorActivity::class.java", bridge_activity)
         bridge = (root / "app/src/main/java/app/aster/browser/TorSocksHttpProxy.java").read_text()
         self.assertIn("new ServerSocket(0, 32, InetAddress.getByName(\"127.0.0.1\"))", bridge)
         self.assertIn("Tor SOCKS5 could not open destination stream", bridge)
@@ -163,7 +168,12 @@ class SinglePackageVariantTests(unittest.TestCase):
         self.assertNotIn("org.mozilla.geckoview", activity)
 
     def test_chromium_to_gecko_handoff_preserves_http_tabs_in_combined_task(self):
-        patch = (ROOT / "patches/m151/0037-aster-single-apk-dual-engine.patch").read_text()
+        patch = "".join((ROOT / "patches/m151" / name).read_text() for name in (
+            "0027-aster-cross-engine-tabs.patch",
+            "0037-aster-single-apk-dual-engine.patch",
+        ))
+        export_patch = (ROOT / "patches/m151/0023-aster-dual-engine-switch.patch").read_text()
+        patch += export_patch
         self.assertIn('intent.putStringArrayListExtra("aster_tabs", urls);', patch)
         self.assertIn('intent.putStringArrayListExtra("aster_tab_titles", titles);', patch)
         self.assertIn('intent.putExtra("aster_active_tab", active);', patch)
@@ -192,8 +202,17 @@ class SinglePackageVariantTests(unittest.TestCase):
         updater = (ROOT.parents[1] / "app/src/main/java/app/aster/browser/AsterAppUpdater.kt").read_text()
         self.assertIn('"AsterBrowser-$remoteVersion-Android-$abi.apk"', updater)
         self.assertNotIn("-Gecko-Android-", updater)
-        chromium_patch = (ROOT / "patches/m151/0029-aster-chromium-tor-updater-version.patch").read_text()
+        chromium_patch = (ROOT / "patches/m151/0021-aster-in-app-updater.patch").read_text()
         self.assertIn('"AsterBrowser-" + tag + "-Android-" + abi + ".apk"', chromium_patch)
+
+    def test_all_patches_are_parseable(self):
+        for patch in sorted((ROOT / "patches/m151").glob("*.patch")):
+            with self.subTest(patch=patch.name):
+                result = subprocess.run(
+                    ["git", "apply", "--numstat", str(patch)],
+                    capture_output=True, text=True,
+                )
+                self.assertEqual(0, result.returncode, result.stderr)
 
     def test_pipeline_accepts_an_existing_android_signing_key(self):
         pipeline = (ROOT / "ci/chromium_android_pipeline.sh").read_text()

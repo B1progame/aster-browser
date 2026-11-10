@@ -66,7 +66,7 @@ diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/and
          android:id="@+id/composeplate_view_stub"
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
-@@ -450,6 +450,57 @@
+@@ -450,6 +450,59 @@
              aiShortcut.setAlpha(0f);
              aiShortcut.setTranslationY(10f * mActivity.getResources().getDisplayMetrics().density);
              aiShortcut.animate().alpha(1f).translationY(0f).setStartDelay(220).setDuration(340).start();
@@ -126,17 +126,6 @@ diff --git a/chrome/android/java/res/layout/new_tab_page_layout.xml b/chrome/and
          }
          setSearchProviderInfo(searchProviderHasLogo, searchProviderIsGoogle);
          initializeMostVisitedTilesCoordinator(
---- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/AsterUpdateManager.java
-+++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/AsterUpdateManager.java
-@@ -110,7 +110,7 @@
-                 throw new IllegalStateException("Invalid Aster release tag");
-             }
-             String abi = androidAbiSuffix();
--            String expectedName = "AsterBrowser-" + tag + "-Android-" + abi + ".apk";
-+            String expectedName = "AsterBrowser-" + tag + "-Android-" + abi + ".apk";
-             JSONArray assets = release.getJSONArray("assets");
-             for (int index = 0; index < assets.length(); index++) {
-                 JSONObject asset = assets.getJSONObject(index);
 --- a/chrome/android/java/res_chromium_base/values/channel_constants.xml
 +++ b/chrome/android/java/res_chromium_base/values/channel_constants.xml
 @@ -12,5 +12,5 @@
