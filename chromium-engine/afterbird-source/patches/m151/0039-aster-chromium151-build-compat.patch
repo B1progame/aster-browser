@@ -1,0 +1,189 @@
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+index f7c99b3..6553de0 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ntp/NewTabPageCoordinator.java
+@@ -398,7 +398,7 @@ public class NewTabPageCoordinator implements ModuleDelegateHost {
+         if ("app.aster.browser".equals(mActivity.getPackageName())) {
+             mNewTabPageLayout.setBackgroundColor(
+                     mActivity.getColor(R.color.aster_ntp_page_surface));
+-            View quickAccessSurface = mNewTabPageLayout.findViewById(R.id.query_tiles);
++            View quickAccessSurface = mNewTabPageLayout.findViewById(R.id.mv_tiles_container);
+             if (quickAccessSurface != null) {
+                 quickAccessSurface.setBackgroundColor(
+                         mActivity.getColor(R.color.aster_ntp_page_surface));
+@@ -499,6 +499,11 @@ public class NewTabPageCoordinator implements ModuleDelegateHost {
+                         }
+                         org.chromium.chrome.browser.app.ChromeActivity activity =
+                                 (org.chromium.chrome.browser.app.ChromeActivity) mActivity;
++                        if (activity.getTabModelSelector().isOffTheRecordModelSelected()) {
++                            intent.putExtra("aster_feature", "ai");
++                            mActivity.startActivity(intent);
++                            return;
++                        }
+                         org.chromium.chrome.browser.tabmodel.TabModel model =
+                                 activity.getTabModelSelector().getModel(false);
+                         java.util.ArrayList<String> urls = new java.util.ArrayList<>();
+@@ -532,23 +537,43 @@ public class NewTabPageCoordinator implements ModuleDelegateHost {
+                                     ? pageUrl : activeTab.getTitle().toString();
+                             new android.app.AlertDialog.Builder(mActivity)
+                                     .setTitle("Share this page with Aster AI?")
+-                                    .setMessage("Aster can read up to 12,000 characters of this page's accessible text. It stays on this device and is only attached to a prompt if you enable the page switch.")
++                                    .setMessage("Aster can read up to 12,000 characters of page text, including offscreen and embedded content. It stays on this device and is only attached to a prompt if you enable the page switch.")
+                                     .setNegativeButton("Cancel", null)
+                                     .setNeutralButton("Continue without sharing",
+                                             (dialog, which) -> mActivity.startActivity(intent))
+-                                    .setPositiveButton("Share page text", (dialog, which) ->
+-                                            pageTab.getWebContents().requestAccessibilitySnapshot(root -> {
++                                    .setPositiveButton("Share page text", (dialog, which) -> {
++                                        if (mActivity.isFinishing() || mActivity.isDestroyed()) return;
++                                        final org.chromium.content_public.browser.WebContents contents = pageTab.getWebContents();
++                                        if (contents == null || contents.isDestroyed() || contents.isIncognito()
++                                                || pageTab.getUrl() == null
++                                                || !pageUrl.equals(pageTab.getUrl().getSpec())) {
++                                            mActivity.startActivity(intent);
++                                            return;
++                                        }
++                                        try {
++                                            org.chromium.components.optimization_guide.content.PageContentProtoProviderBridge.getAiPageContent(contents, page -> {
++                                                if (mActivity.isFinishing() || mActivity.isDestroyed()) return;
++                                                if (contents.isDestroyed() || pageTab.getUrl() == null
++                                                        || !pageUrl.equals(pageTab.getUrl().getSpec())) {
++                                                    mActivity.startActivity(intent);
++                                                    return;
++                                                }
+                                                 StringBuilder extracted = new StringBuilder();
+-                                                if (root != null) {
+-                                                    java.util.ArrayDeque<org.chromium.content_public.browser.AccessibilitySnapshotNode> nodes = new java.util.ArrayDeque<>();
+-                                                    nodes.add(root);
+-                                                    while (!nodes.isEmpty() && extracted.length() < 12000) {
+-                                                        org.chromium.content_public.browser.AccessibilitySnapshotNode node = nodes.removeFirst();
+-                                                        if (node.text != null && !node.text.isEmpty()) {
+-                                                            extracted.append(node.text).append('\n');
++                                                if (page != null) {
++                                                    java.util.ArrayDeque<org.chromium.components.optimization_guide.features.proto.CommonFeatureDataProto.ContentNode> nodes = new java.util.ArrayDeque<>();
++                                                    nodes.add(page.getRootNode());
++                                                    int visited = 0;
++                                                    while (!nodes.isEmpty() && extracted.length() < 12000 && visited++ < 10000) {
++                                                        org.chromium.components.optimization_guide.features.proto.CommonFeatureDataProto.ContentNode node = nodes.removeFirst();
++                                                        String text = node.getContentAttributes().getTextData().getTextContent();
++                                                        if (!text.isEmpty()) {
++                                                            int remaining = 12000 - extracted.length();
++                                                            extracted.append(text, 0, Math.min(text.length(), remaining));
++                                                            if (extracted.length() < 12000) extracted.append('\n');
+                                                         }
+-                                                        for (org.chromium.content_public.browser.AccessibilitySnapshotNode child : node.children) {
+-                                                            if (child != null) nodes.addLast(child);
++                                                        for (org.chromium.components.optimization_guide.features.proto.CommonFeatureDataProto.ContentNode child : node.getChildrenNodesList()) {
++                                                            if (nodes.size() >= 10000) break;
++                                                            nodes.addLast(child);
+                                                         }
+                                                     }
+                                                 }
+@@ -556,7 +581,11 @@ public class NewTabPageCoordinator implements ModuleDelegateHost {
+                                                 intent.putExtra("aster_page_title", pageTitle);
+                                                 intent.putExtra("aster_page_text", extracted.toString());
+                                                 mActivity.startActivity(intent);
+-                                            }))
++                                            });
++                                        } catch (RuntimeException | LinkageError error) {
++                                            mActivity.startActivity(intent);
++                                        }
++                                    })
+                                     .show();
+                         } else {
+                             mActivity.startActivity(intent);
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
+index d3dd9b8..8b8ab54 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
+@@ -472,8 +472,22 @@ public class MainSettings extends ChromeBaseSettingsFragment
+                             onPreferenceSelected(preference);
+                             Activity activity = getActivity();
+                             if (activity == null) return true;
++                            if (!(activity instanceof org.chromium.chrome.browser.app.ChromeActivity)) {
++                                android.content.Intent fallback = new android.content.Intent(
++                                        activity, app.aster.browser.ChromiumFeaturesActivity.class);
++                                fallback.putExtra("aster_feature", "ai");
++                                activity.startActivity(fallback);
++                                return true;
++                            }
+                             org.chromium.chrome.browser.app.ChromeActivity chromeActivity =
+                                     (org.chromium.chrome.browser.app.ChromeActivity) activity;
++                            if (chromeActivity.getTabModelSelector().isOffTheRecordModelSelected()) {
++                                android.content.Intent fallback = new android.content.Intent(
++                                        activity, app.aster.browser.ChromiumFeaturesActivity.class);
++                                fallback.putExtra("aster_feature", "ai");
++                                activity.startActivity(fallback);
++                                return true;
++                            }
+                             org.chromium.chrome.browser.tabmodel.TabModel model =
+                                     chromeActivity.getTabModelSelector().getModel(false);
+                             java.util.ArrayList<String> urls = new java.util.ArrayList<>();
+@@ -508,21 +522,43 @@ public class MainSettings extends ChromeBaseSettingsFragment
+                                     ? pageUrl : activeTab.getTitle().toString();
+                             new android.app.AlertDialog.Builder(activity)
+                                     .setTitle("Share this page with Aster AI?")
+-                                    .setMessage("Aster can read up to 12,000 characters of this page's accessible text. The model runs locally. The text is only attached to a prompt if you enable the page switch.")
++                                    .setMessage("Aster can read up to 12,000 characters of page text, including offscreen and embedded content. The model runs locally. The text is only attached to a prompt if you enable the page switch.")
+                                     .setNegativeButton("Cancel", null)
+                                     .setNeutralButton("Continue without sharing",
+                                             (dialog, which) -> activity.startActivity(aiIntent))
+-                                    .setPositiveButton("Share page text", (dialog, which) ->
+-                                            pageTab.getWebContents().requestAccessibilitySnapshot(root -> {
++                                    .setPositiveButton("Share page text", (dialog, which) -> {
++                                        if (activity.isFinishing() || activity.isDestroyed()) return;
++                                        final org.chromium.content_public.browser.WebContents contents = pageTab.getWebContents();
++                                        if (contents == null || contents.isDestroyed() || contents.isIncognito()
++                                                || pageTab.getUrl() == null
++                                                || !pageUrl.equals(pageTab.getUrl().getSpec())) {
++                                            activity.startActivity(aiIntent);
++                                            return;
++                                        }
++                                        try {
++                                            org.chromium.components.optimization_guide.content.PageContentProtoProviderBridge.getAiPageContent(contents, page -> {
++                                                if (activity.isFinishing() || activity.isDestroyed()) return;
++                                                if (contents.isDestroyed() || pageTab.getUrl() == null
++                                                        || !pageUrl.equals(pageTab.getUrl().getSpec())) {
++                                                    activity.startActivity(aiIntent);
++                                                    return;
++                                                }
+                                                 StringBuilder extracted = new StringBuilder();
+-                                                if (root != null) {
+-                                                    java.util.ArrayDeque<org.chromium.content_public.browser.AccessibilitySnapshotNode> nodes = new java.util.ArrayDeque<>();
+-                                                    nodes.add(root);
+-                                                    while (!nodes.isEmpty() && extracted.length() < 12000) {
+-                                                        org.chromium.content_public.browser.AccessibilitySnapshotNode node = nodes.removeFirst();
+-                                                        if (node.text != null && !node.text.isEmpty()) extracted.append(node.text).append('\n');
+-                                                        for (org.chromium.content_public.browser.AccessibilitySnapshotNode child : node.children) {
+-                                                            if (child != null) nodes.addLast(child);
++                                                if (page != null) {
++                                                    java.util.ArrayDeque<org.chromium.components.optimization_guide.features.proto.CommonFeatureDataProto.ContentNode> nodes = new java.util.ArrayDeque<>();
++                                                    nodes.add(page.getRootNode());
++                                                    int visited = 0;
++                                                    while (!nodes.isEmpty() && extracted.length() < 12000 && visited++ < 10000) {
++                                                        org.chromium.components.optimization_guide.features.proto.CommonFeatureDataProto.ContentNode node = nodes.removeFirst();
++                                                        String text = node.getContentAttributes().getTextData().getTextContent();
++                                                        if (!text.isEmpty()) {
++                                                            int remaining = 12000 - extracted.length();
++                                                            extracted.append(text, 0, Math.min(text.length(), remaining));
++                                                            if (extracted.length() < 12000) extracted.append('\n');
++                                                        }
++                                                        for (org.chromium.components.optimization_guide.features.proto.CommonFeatureDataProto.ContentNode child : node.getChildrenNodesList()) {
++                                                            if (nodes.size() >= 10000) break;
++                                                            nodes.addLast(child);
+                                                         }
+                                                     }
+                                                 }
+@@ -530,7 +566,11 @@ public class MainSettings extends ChromeBaseSettingsFragment
+                                                 aiIntent.putExtra("aster_page_title", pageTitle);
+                                                 aiIntent.putExtra("aster_page_text", extracted.toString());
+                                                 activity.startActivity(aiIntent);
+-                                            }))
++                                            });
++                                        } catch (RuntimeException | LinkageError error) {
++                                            activity.startActivity(aiIntent);
++                                        }
++                                    })
+                                     .show();
+                             return true;
+                         });

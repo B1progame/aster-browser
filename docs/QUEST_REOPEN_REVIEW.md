@@ -33,6 +33,12 @@ blocking work in source; it does not establish the cause of the reported ANR.
   unrelated app's ANR, and a best-effort kill that does not stop the app.
 - Independent code review covered the startup, persistence, lifecycle, patch,
   and test-tool changes. `git diff --check` passed.
+- On 2026-11-12, the Quest ARM64 build reached Chromium Java compilation but
+  failed on nine references to an absent API/resource. Patch 0039 replaces those
+  references. It applies to the exact pinned, previously patched Chromium files;
+  both page-capture callbacks compile against API-shaped test stubs. Independent
+  source review and two host tests of the incremental resume helper passed. A full
+  Chromium recompilation and runtime test are still needed.
 
 Final `:app:lintDebug` passed with zero errors and 148 warnings remaining.
 The blocking API-compatibility error, two proxy-feature warnings, and drawing
@@ -50,6 +56,13 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/tests -v
 ```
 
 ## Remaining limits
+
+- The pinned Chromium 151 lacks the accessibility snapshot API used by the
+  previous AI page-sharing code. The current candidate uses Chromium's page
+  content API after explicit consent, with bounded text extraction and private
+  tab checks. This replacement needs Chromium compilation and runtime/privacy
+  verification; if settings has no browser Activity, it opens AI without page
+  text. The consent dialog notes that embedded and offscreen text may be included.
 
 - No physical Quest 3S or emulator runtime test was completed in this environment.
   No on-device startup time, RAM, CPU, battery, or frame-time improvement is
