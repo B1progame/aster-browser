@@ -1,20 +1,19 @@
-# Quest 3S reopening — source candidate
+# Quest 3S reopening — test candidate
 
-This is a draft source candidate, not an installable or Quest-verified release.
-No APK is attached. Existing upstream v5.0.0 APKs do not include these changes.
+An ARM64 combined Chromium/Gecko APK was built on 2026-11-12 and uploaded to the
+fork's draft release. Its APK signature, package, ABI, native libraries, and
+SHA-256 were independently checked. It has not been tested on Quest hardware;
+the reported reopening hang is not confirmed fixed.
 
-Changes move shared startup diagnostics off the main thread, coalesce Gecko
-session/privacy saves on a worker, preserve the current snapshot during Activity
-recreation, and pause hidden Gecko sessions/media. Chromium patch syntax and
-configuration tests are repaired. A device reopen-check tool is included.
-The Tor HTTP relay also uses an Android-29-compatible copy loop, proxy calls
-have local feature guards, and the Tor animation reuses its drawing path.
+The candidate is signed with a different key from upstream v5.0.0. It cannot
+directly update that installation; preserve its data before considering any
+uninstall. The package metadata still says 5.0.0/805000000, so this is a manually
+installed test candidate rather than an automatic update.
 
-Android compilation, 18 Android unit tests, the integration release AAR build,
-15 Chromium configuration/patch checks, and five test-tool host tests pass.
-Android lint passes with zero errors and 148 warnings remaining.
-See `docs/QUEST_REOPEN_REVIEW.md` for the results and remaining limits.
+Source: `d808c20d0fa520857b3a02b0b3218e634ee9c9fe`
+APK: `ChromePublic.apk` (ARM64)
+SHA-256: `20390d298cf7fedefc01693d260dcb47d87b5a14d7b81bad1265ffbaecd9023d`
 
-The reported Quest 3S ANR has not been reproduced or confirmed fixed on hardware.
-The combined ARM64 APK must be rebuilt, signed, and physically tested before
-publication. Immediate process death can still lose an unfinished state write.
+Changes address shared startup diagnostics, Gecko state persistence and hidden
+session behavior, Android API compatibility, and Chromium patch/build errors.
+See `docs/QUEST_REOPEN_REVIEW.md` for validation, open issues and the device test.

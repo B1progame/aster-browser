@@ -4,7 +4,7 @@
 
 > **v5 includes two CPU builds of the same app:** ARM64 for most Android phones and Quest-family devices, and x86_64 for emulator testing. It is not a separate Chromium APK and Gecko APK. The upstream v5 release was published on 2026-10-27.
 
-**Quest 3S reopening investigation (2026-11-10):** this fork contains startup and persistence hardening for the reported “app isn't responding” after closing and reopening either engine. The cause has not been reproduced on a headset. Existing v5 APKs do **not** contain these changes. See [the review, checks, limitations, and device test procedure](docs/QUEST_REOPEN_REVIEW.md). A source candidate is not an installable or Quest-verified release.
+**Quest 3S reopening investigation:** this fork contains startup and persistence hardening for the reported “app isn't responding” after closing and reopening either engine. An ARM64 candidate was built on 2026-11-12 and uploaded to a draft release, but the hang has not been reproduced or verified fixed on a headset. Its signing key differs from upstream v5, so it cannot directly update that installed release. Existing upstream v5 APKs do **not** contain these changes. See [the review, checks, limitations, and device test procedure](docs/QUEST_REOPEN_REVIEW.md).
 
 [Releases](https://github.com/B1progame/aster-browser/releases) · [Open issues](https://github.com/B1progame/aster-browser/issues) · [Roadmap](docs/ROADMAP.md)
 

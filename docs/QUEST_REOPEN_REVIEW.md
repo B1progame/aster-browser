@@ -33,12 +33,15 @@ blocking work in source; it does not establish the cause of the reported ANR.
   unrelated app's ANR, and a best-effort kill that does not stop the app.
 - Independent code review covered the startup, persistence, lifecycle, patch,
   and test-tool changes. `git diff --check` passed.
-- On 2026-11-12, the Quest ARM64 build reached Chromium Java compilation but
-  failed on nine references to an absent API/resource. Patch 0039 replaces those
-  references. It applies to the exact pinned, previously patched Chromium files;
-  both page-capture callbacks compile against API-shaped test stubs. Independent
-  source review and two host tests of the incremental resume helper passed. A full
-  Chromium recompilation and runtime test are still needed.
+- On 2026-11-12, an ARM64 build initially failed on nine references to an absent
+  Chromium API/resource. Patch 0039 replaced those references. The user then
+  completed the combined Chromium/Gecko ARM64 build from source commit
+  `d808c20d0fa520857b3a02b0b3218e634ee9c9fe` and uploaded the APK to the fork's
+  draft release. An independent download verified its SHA-256
+  `20390d298cf7fedefc01693d260dcb47d87b5a14d7b81bad1265ffbaecd9023d`, valid
+  APK signature, package `app.aster.browser`, version `5.0.0`/`805000000`,
+  ARM64 ABI, and presence of Chromium and Gecko native libraries. This confirms
+  the artifact and build, not the reported Quest behavior.
 
 Final `:app:lintDebug` passed with zero errors and 148 warnings remaining.
 The blocking API-compatibility error, two proxy-feature warnings, and drawing
@@ -72,9 +75,13 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/tests -v
   protects Activity recreation, not process death. Reopening and restoring every
   tab after process death must be checked on the headset.
 - The full Chromium checkout/build output and original signing key are not
-  available here. This small environment cannot rebuild the combined ARM64
-  browser from its overlay alone. Compiling its Gecko integration AAR does not
-  compile Chromium or verify its native ARM64 packaging.
+  available in this workspace; the candidate was built on the user's cloud VM.
+  Its signing certificate SHA-256 is
+  `32a2fc74d731105859e5a85df16d95f102d85b22099b8064c5d8915c61dad1e0`, which
+  differs from the independently verified upstream v5 ARM64 certificate
+  `59b7beae054026bd0269fcedb68a3144960bf227528f366b92cf878caca2e79f`.
+  Android cannot directly update the upstream v5 install with this candidate.
+  Do not uninstall an existing app without first preserving its data.
 - Existing issues for Tor rendering, AI responses, video playback, extension
   compatibility, and complete session restoration remain open/unverified. This
   change does not claim all browser errors are fixed.
