@@ -37,7 +37,8 @@ blocking work in source; it does not establish the cause of the reported ANR.
   Chromium API/resource. Patch 0039 replaced those references. The user then
   completed the combined Chromium/Gecko ARM64 build from source commit
   `d808c20d0fa520857b3a02b0b3218e634ee9c9fe` and uploaded the APK to the fork's
-  draft release. An independent download verified its SHA-256
+  `v5.1.0` test release. The APK internally reports version 5.0.0; an independent
+  download verified its SHA-256
   `20390d298cf7fedefc01693d260dcb47d87b5a14d7b81bad1265ffbaecd9023d`, valid
   APK signature, package `app.aster.browser`, version `5.0.0`/`805000000`,
   ARM64 ABI, and presence of Chromium and Gecko native libraries. This confirms
@@ -121,5 +122,5 @@ pauses, foreground media resumes appropriately, and controller input works.
 Record the headset OS, APK checksum, engine, exact close action, launch timing,
 and filtered ANR/crash evidence.
 
-Only publish an installable release after these checks pass on the exact ARM64
-artifact. Do not attach an old upstream v5 APK as though it contains these fixes.
+A stable release should be published only after these checks pass on the exact
+ARM64 artifact and its internal version and signing are resolved. Do not attach an old upstream v5 APK as though it contains these fixes.
