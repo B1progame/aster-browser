@@ -7,9 +7,9 @@ SOURCE_DIR="$TASK_ROOT/chromium/src"
 APK="$SOURCE_DIR/out/afterbird_production/apks/ChromePublic.apk"
 SDK_TOOLS="$TASK_ROOT/tools/android-sdk/build-tools/37.0.0"
 REPO="bprosusupro-rgb/aster-browser-questfixed"
-TAG="v5.1.0"
+TAG="v5.2.0"
 SOURCE_COMMIT="125bb14"
-ASSET="AsterBrowser-v5.1.0-Quest-settings-fix-test.apk"
+ASSET="AsterBrowser-v5.2.0-Quest-arm64-test.apk"
 
 # Use the exact reviewed build helper, even if the local checkout is older.
 TEMP_DIR=$(mktemp -d)
@@ -51,8 +51,20 @@ if [ "$(gh api user --jq .login)" != 'bprosusupro-rgb' ]; then
     printf '\nPlease log in to GitHub as bprosusupro-rgb and try again.\n' >&2
     exit 1
 fi
+EXPECTED_SHA=$(git -C "$PROJECT_DIR" rev-parse "$SOURCE_COMMIT")
+if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+    printf '\nCreating the v5.2.0 test release...\n'
+    gh release create "$TAG" --repo "$REPO" --target "$EXPECTED_SHA" --prerelease \
+        --title 'v5.2.0 Quest test' \
+        --notes 'Quest test build with the Chromium settings engine and Aster tools crash fix. This APK has not yet been verified on Quest. Its internal Android version remains 5.0.0 (805000000); v5.2.0 is the release label. The signing key matches the previous fork test APK and differs from upstream v5. YouTube and Spotify loading performance is still under investigation.'
+fi
 if [ "$(gh release view "$TAG" --repo "$REPO" --json isPrerelease --jq .isPrerelease)" != true ]; then
-    printf '\nThe expected test release was not found. Upload stopped.\n' >&2
+    printf '\nThe release exists but is not a test release. Upload stopped.\n' >&2
+    exit 1
+fi
+TAG_SHA=$(gh api "repos/$REPO/git/ref/tags/$TAG" --jq .object.sha)
+if [ "$TAG_SHA" != "$EXPECTED_SHA" ]; then
+    printf '\nThe release tag does not point to the reviewed source. Upload stopped.\n' >&2
     exit 1
 fi
 EXISTING=$(gh api "repos/$REPO/releases/tags/$TAG" --jq ".assets[] | select(.name == \"$ASSET\") | .digest // \"unknown\"")
@@ -71,6 +83,9 @@ REMOTE=$(gh api "repos/$REPO/releases/tags/$TAG" --jq ".assets[] | select(.name 
 if [ "$REMOTE" != "sha256:$SHA" ]; then
     printf '\nGitHub did not confirm the expected APK checksum. Please send a photo.\n' >&2
     exit 1
+fi
+if [ "$(gh release view "$TAG" --repo "$REPO" --json isDraft --jq .isDraft)" = true ]; then
+    gh release edit "$TAG" --repo "$REPO" --draft=false --prerelease
 fi
 printf '\nUPLOAD COMPLETE: https://github.com/%s/releases/tag/%s\n' "$REPO" "$TAG"
 printf 'File: %s\nSHA-256: %s\n' "$ASSET" "$SHA"
