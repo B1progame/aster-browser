@@ -1,0 +1,139 @@
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
+index 8b8ab54..cd1df70 100644
+--- a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
+@@ -349,6 +349,52 @@ public class MainSettings extends ChromeBaseSettingsFragment
+         mSettingsCustomTabLauncher = customTabLauncher;
+     }
+
++    /** Finds an unambiguous, live browser in the same Android task as Settings. */
++    private static org.chromium.chrome.browser.@Nullable ChromeTabbedActivity asterFindBrowser(
++            Activity settingsActivity) {
++        org.chromium.chrome.browser.@Nullable ChromeTabbedActivity found = null;
++        for (Activity candidate : org.chromium.base.ApplicationStatus.getRunningActivities()) {
++            if (!(candidate instanceof org.chromium.chrome.browser.ChromeTabbedActivity)
++                    || candidate.getTaskId() != settingsActivity.getTaskId()
++                    || candidate.isFinishing()
++                    || candidate.isDestroyed()) {
++                continue;
++            }
++            org.chromium.chrome.browser.ChromeTabbedActivity browser =
++                    (org.chromium.chrome.browser.ChromeTabbedActivity) candidate;
++            // Activity enumeration is unordered; never copy tabs from the wrong
++            // window if more than one browser matches this task.
++            if (found != null) return null;
++            found = browser;
++        }
++        return found;
++    }
++
++    /** Transfers only normal HTTP(S) tabs when the source is ready and non-private. */
++    private static void asterAttachRegularTabs(
++            Intent intent, org.chromium.chrome.browser.@Nullable ChromeTabbedActivity browser) {
++        if (browser == null || !browser.areTabModelsInitialized()) return;
++        org.chromium.chrome.browser.tabmodel.TabModelSelector selector =
++                browser.getTabModelSelector();
++        if (!selector.isTabStateInitialized() || selector.isOffTheRecordModelSelected()) return;
++        org.chromium.chrome.browser.tabmodel.TabModel model = selector.getModel(false);
++        java.util.ArrayList<String> urls = new java.util.ArrayList<>();
++        java.util.ArrayList<String> titles = new java.util.ArrayList<>();
++        int active = 0;
++        for (int i = 0; i < model.getCount(); i++) {
++            org.chromium.chrome.browser.tab.Tab tab = model.getTabAt(i);
++            if (tab == null || tab.getUrl() == null) continue;
++            String url = tab.getUrl().getSpec();
++            if (!url.startsWith("https://") && !url.startsWith("http://")) continue;
++            if (i == model.index()) active = urls.size();
++            urls.add(url);
++            titles.add(tab.getTitle() == null ? url : tab.getTitle().toString());
++        }
++        intent.putStringArrayListExtra("aster_tabs", urls);
++        intent.putStringArrayListExtra("aster_tab_titles", titles);
++        intent.putExtra("aster_active_tab", active);
++    }
++
+     @Initializer
+     private void createPreferences() {
+         mManagedPreferenceDelegate = createManagedPreferenceDelegate();
+@@ -367,38 +413,11 @@ public class MainSettings extends ChromeBaseSettingsFragment
+                             onPreferenceSelected(preference);
+                             Activity activity = getActivity();
+                             if (activity == null) return true;
+-                            Intent launchIntent =
+-                                    new android.content.Intent(activity, app.aster.browser.ChromiumFeaturesActivity.class);
+-                            if (launchIntent == null) {
+-                                new AlertDialog.Builder(activity)
+-                                        .setTitle("GeckoView is not installed")
+-                                        .setMessage(
+-                                                "Install the Aster GeckoView build to use Firefox add-ons."
+-                                                        + " Chromium tabs and extensions stay saved here.")
+-                                        .setPositiveButton("Close", null)
+-                                        .show();
+-                            } else {
+-                                org.chromium.chrome.browser.app.ChromeActivity chromeActivity =
+-                                        (org.chromium.chrome.browser.app.ChromeActivity) activity;
+-                                org.chromium.chrome.browser.tabmodel.TabModel model =
+-                                        chromeActivity.getTabModelSelector().getModel(false);
+-                                java.util.ArrayList<String> urls = new java.util.ArrayList<>();
+-                                java.util.ArrayList<String> titles = new java.util.ArrayList<>();
+-                                int active = 0;
+-                                for (int i = 0; i < model.getCount(); i++) {
+-                                    org.chromium.chrome.browser.tab.Tab tab = model.getTabAt(i);
+-                                    if (tab == null || tab.getUrl() == null) continue;
+-                                    String url = tab.getUrl().getSpec();
+-                                    if (!url.startsWith("https://") && !url.startsWith("http://")) continue;
+-                                    if (i == model.index()) active = urls.size();
+-                                    urls.add(url);
+-                                    titles.add(tab.getTitle() == null ? url : tab.getTitle().toString());
+-                                }
+-                                launchIntent.putStringArrayListExtra("aster_tabs", urls);
+-                                launchIntent.putStringArrayListExtra("aster_tab_titles", titles);
+-                                launchIntent.putExtra("aster_active_tab", active);
+-                                activity.startActivity(launchIntent);
+-                            }
++                            Intent launchIntent = new Intent(activity, app.aster.browser.MainActivity.class);
++                            asterAttachRegularTabs(launchIntent, asterFindBrowser(activity));
++                            launchIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
++                                    | Intent.FLAG_ACTIVITY_SINGLE_TOP);
++                            activity.startActivity(launchIntent);
+                             return true;
+                         });
+
+@@ -408,34 +427,9 @@ public class MainSettings extends ChromeBaseSettingsFragment
+                             onPreferenceSelected(preference);
+                             Activity activity = getActivity();
+                             if (activity == null) return true;
+-                            Intent launchIntent = new android.content.Intent(activity, app.aster.browser.ChromiumFeaturesActivity.class);
+-                            if (launchIntent == null) {
+-                                new AlertDialog.Builder(activity)
+-                                        .setTitle("Aster tools unavailable")
+-                                        .setMessage("Install the Aster Chromium tools to use its AI, Tor private window, privacy dashboard, site shredder and Chromium extensions.")
+-                                        .setPositiveButton("Close", null)
+-                                        .show();
+-                                return true;
+-                            }
+-                            org.chromium.chrome.browser.app.ChromeActivity chromeActivity =
+-                                    (org.chromium.chrome.browser.app.ChromeActivity) activity;
+-                            org.chromium.chrome.browser.tabmodel.TabModel model =
+-                                    chromeActivity.getTabModelSelector().getModel(false);
+-                            java.util.ArrayList<String> urls = new java.util.ArrayList<>();
+-                            java.util.ArrayList<String> titles = new java.util.ArrayList<>();
+-                            int active = 0;
+-                            for (int i = 0; i < model.getCount(); i++) {
+-                                org.chromium.chrome.browser.tab.Tab tab = model.getTabAt(i);
+-                                if (tab == null || tab.getUrl() == null) continue;
+-                                String url = tab.getUrl().getSpec();
+-                                if (!url.startsWith("https://") && !url.startsWith("http://")) continue;
+-                                if (i == model.index()) active = urls.size();
+-                                urls.add(url);
+-                                titles.add(tab.getTitle() == null ? url : tab.getTitle().toString());
+-                            }
+-                            launchIntent.putStringArrayListExtra("aster_tabs", urls);
+-                            launchIntent.putStringArrayListExtra("aster_tab_titles", titles);
+-                            launchIntent.putExtra("aster_active_tab", active);
++                            Intent launchIntent = new Intent(
++                                    activity, app.aster.browser.ChromiumFeaturesActivity.class);
++                            asterAttachRegularTabs(launchIntent, asterFindBrowser(activity));
+                             launchIntent.putExtra("aster_feature", "tools");
+                             launchIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                     | Intent.FLAG_ACTIVITY_SINGLE_TOP);
