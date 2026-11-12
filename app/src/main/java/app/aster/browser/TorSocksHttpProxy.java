@@ -117,7 +117,7 @@ public final class TorSocksHttpProxy implements AutoCloseable {
                     output.write("HTTP/1.1 200 Connection Established\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
                     output.flush();
                     lastStage = "relaying encrypted tunnel";
-                relayDuplex(client, input, upstream, clientToTorBytes, torToClientBytes);
+                    relayDuplex(client, input, upstream, clientToTorBytes, torToClientBytes);
                 }
             } else {
                 Target target = parseHttpTarget(parts[1], headers);
@@ -152,7 +152,8 @@ public final class TorSocksHttpProxy implements AutoCloseable {
                     else if (contentLength > 0) copyExactly(input, upstreamOutput, contentLength);
                     upstreamOutput.flush();
                     upstream.shutdownOutput();
-                    inputStream(upstream).transferTo(output);
+                    // InputStream.transferTo is unavailable before Android 13.
+                    copyAndCount(upstream.getInputStream(), output, torToClientBytes);
                     output.flush();
                 }
             }
@@ -367,8 +368,6 @@ public final class TorSocksHttpProxy implements AutoCloseable {
         }
         return result;
     }
-
-    private static InputStream inputStream(Socket socket) throws IOException { return socket.getInputStream(); }
 
     private static void relayDuplex(Socket client, InputStream clientInput, Socket upstream,
                                     AtomicLong clientToTorBytes, AtomicLong torToClientBytes) throws IOException {

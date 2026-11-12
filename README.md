@@ -2,7 +2,9 @@
 
 **Aster is one Android browser app with Chromium and GeckoView in the same package.** Switch engines inside the app; the tab URLs move with you. Each engine keeps its own cookies, extensions, permissions, and site profile.
 
-> **v5 includes two CPU builds of the same app:** ARM64 for most Android phones and Quest-family devices, and x86_64 for emulator testing. It is not a separate Chromium APK and Gecko APK. The v5 GitHub release is currently a draft while its two APK assets are uploaded.
+> **v5 includes two CPU builds of the same app:** ARM64 for most Android phones and Quest-family devices, and x86_64 for emulator testing. It is not a separate Chromium APK and Gecko APK. The upstream v5 release was published on 2026-10-27.
+
+**Quest 3S reopening investigation:** this fork contains startup and persistence hardening for the reported “app isn't responding” after closing and reopening either engine. An ARM64 candidate was built on 2026-11-12 and published as a `v5.1.0` test release, but the APK internally reports version 5.0.0 and the hang has not been reproduced or verified fixed on a headset. Its signing key differs from upstream v5, so it cannot directly update that installed release. Existing upstream v5 APKs do **not** contain these changes. See [the review, checks, limitations, and device test procedure](docs/QUEST_REOPEN_REVIEW.md).
 
 [Releases](https://github.com/B1progame/aster-browser/releases) · [Open issues](https://github.com/B1progame/aster-browser/issues) · [Roadmap](docs/ROADMAP.md)
 
@@ -29,7 +31,7 @@ The app also has bookmarks/history views, engine-specific privacy controls, a lo
 
 ## v5 download
 
-When the draft is published, download the build matching the device's CPU from [GitHub Releases](https://github.com/B1progame/aster-browser/releases):
+Download the existing v5 build matching the device's CPU from [upstream GitHub Releases](https://github.com/B1progame/aster-browser/releases):
 
 | APK | Device | What is inside |
 |---|---|---|

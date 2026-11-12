@@ -6,7 +6,7 @@
              super.onNewIntentWithNative(intent);
 +            handleAsterTabHandoff(intent);
              if (!IntentHandler.shouldIgnoreIntent(intent, this, /* isCustomTab= */ false)) {
-@@ -1926,1 +1926,41 @@ public class ChromeTabbedActivity extends ChromeActivity
+@@ -1926,1 +1927,41 @@ public class ChromeTabbedActivity extends ChromeActivity
 +    /** Imports the portable normal-tab portion of a session from Aster GeckoView. */
 +    private void handleAsterTabHandoff(Intent intent) {
 +        java.util.ArrayList<String> urls = intent.getStringArrayListExtra("aster_tabs");
@@ -48,8 +48,8 @@
 +    }
 +
      private void maybeHandleOpenTabGroupIntent(Intent intent) {
-@@ -2525,2 +2525,3 @@ public class ChromeTabbedActivity extends ChromeActivity
+@@ -2525,3 +2566,4 @@ public class ChromeTabbedActivity extends ChromeActivity
              mTabModelOrchestrator.restoreTabs(activeTabBeingRestored);
 +            handleAsterTabHandoff(intent);
- 
-+            handleAsterTabHandoff(intent);
+
+             // Only create an initial tab if no tabs were restored and no intent was handled.

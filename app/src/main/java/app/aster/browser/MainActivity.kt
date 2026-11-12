@@ -151,6 +151,7 @@ class MainActivity : Activity() {
     private val homeUrl = "resource://android/assets/home.html"
     private var activeId = 0L
     private var nextId = 1L
+    private var browserResumed = false
     private var screen = "browser"
     private var themeName = "Midnight"
     private var dark = 0xff17191d.toInt()
@@ -163,6 +164,8 @@ class MainActivity : Activity() {
     private val privacyCounts = linkedMapOf<String, Int>()
     private val privacyCountHandler = Handler(Looper.getMainLooper())
     private val savePrivacyCounts = Runnable { persistPrivacyCounts() }
+    private val tabSaveHandler = Handler(Looper.getMainLooper())
+    private val saveTabs = Runnable { persistTabsNow() }
     private var localAiStatus: TextView? = null
     private var localAiModelTitle: TextView? = null
     private var localAiTranscript: LinearLayout? = null
@@ -978,6 +981,11 @@ class MainActivity : Activity() {
 
     private fun restorePrivacyCounts() {
         privacyCounts.clear()
+        BrowserStatePersistence.privacySnapshot?.let {
+            privacyCounts.putAll(it)
+            trimPrivacyCounts()
+            return
+        }
         runCatching {
             val data = JSONObject(prefs.getString("privacy_daily_counts", "{}") ?: "{}")
             data.keys().forEach { key -> privacyCounts[key] = data.optInt(key, 0).coerceAtLeast(0) }
@@ -1000,9 +1008,15 @@ class MainActivity : Activity() {
     }
 
     private fun persistPrivacyCounts() {
-        val data = JSONObject()
-        privacyCounts.forEach { (day, count) -> data.put(day, count) }
-        prefs.edit().putString("privacy_daily_counts", data.toString()).apply()
+        privacyCountHandler.removeCallbacks(savePrivacyCounts)
+        val snapshot = privacyCounts.toMap()
+        BrowserStatePersistence.privacySnapshot = snapshot
+        val storage = prefs
+        BrowserStatePersistence.write("privacy_counts") {
+            val data = JSONObject()
+            snapshot.forEach { (day, count) -> data.put(day, count) }
+            check(storage.edit().putString("privacy_daily_counts", data.toString()).commit())
+        }
     }
 
     private fun recentPrivacyCounts(): List<Pair<String, Int>> {
@@ -1564,6 +1578,7 @@ class MainActivity : Activity() {
         private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = dp(2).toFloat() }
         private val node = Paint(Paint.ANTI_ALIAS_FLAG)
         private val center = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val star = android.graphics.Path()
         private var angle = 0f
         private val motion = ValueAnimator.ofFloat(0f, 360f).apply {
             duration = 2100L
@@ -1605,7 +1620,8 @@ class MainActivity : Activity() {
             canvas.drawCircle(cx, cy, dp(20).toFloat(), center)
             center.color = accent
             val p = dp(7).toFloat()
-            val star = android.graphics.Path().apply {
+            star.apply {
+                reset()
                 moveTo(cx, cy - p); lineTo(cx + p * .24f, cy - p * .24f); lineTo(cx + p, cy)
                 lineTo(cx + p * .24f, cy + p * .24f); lineTo(cx, cy + p); lineTo(cx - p * .24f, cy + p * .24f)
                 lineTo(cx - p, cy); lineTo(cx - p * .24f, cy - p * .24f); close()
@@ -3128,7 +3144,7 @@ class MainActivity : Activity() {
     private fun newSession(privateMode: Boolean = false): GeckoSession {
         val settings = GeckoSessionSettings.Builder()
             .usePrivateMode(privateMode)
-            .suspendMediaWhenInactive(false)
+            .suspendMediaWhenInactive(true)
             .build()
         if (AsterDevicePolicy.isMetaQuest3s()) {
             // GeckoView's desktop UA and desktop-width viewport are separate settings.
@@ -3149,7 +3165,12 @@ class MainActivity : Activity() {
         if (tab.lastHost == null) tab.lastHost = siteHost(tab.url)
         val previous = current()
         if (previous?.id != id) {
-            previous?.let { if (it.session.isOpen) extensions.setTabActive(it.session, false) }
+            previous?.let {
+                if (it.session.isOpen) {
+                    it.session.setActive(false)
+                    extensions.setTabActive(it.session, false)
+                }
+            }
         }
         activeId=id
         updateTabletTabStrip()
@@ -3202,6 +3223,7 @@ class MainActivity : Activity() {
             }
         }
         gecko.setSession(tab.session)
+        tab.session.setActive(browserResumed)
         gecko.setBackgroundColor(dark)
         if (screen == "ai") updateAiPageContext()
         if (!tab.loaded) { tab.session.loadUri(uriForTheme(tab.url)); tab.loaded = true }
@@ -3301,6 +3323,16 @@ class MainActivity : Activity() {
     }
 
     private fun restoreTabs() {
+        BrowserStatePersistence.sessionSnapshot?.let { snapshot ->
+            tabs.clear()
+            snapshot.tabs.forEach {
+                tabs += BrowserTab(it.id, it.url, it.title, newSession())
+                nextId = maxOf(nextId, it.id + 1)
+            }
+            if (tabs.isEmpty()) tabs += BrowserTab(nextId++, homeUrl, "New tab", newSession())
+            activeId = snapshot.active
+            return
+        }
         val data=prefs.getString("tabs",null) ?: return
         try {
             val arr=JSONArray(data); tabs.clear()
@@ -3317,10 +3349,27 @@ class MainActivity : Activity() {
         } catch(_:Exception) { tabs.clear(); tabs+=BrowserTab(nextId++,homeUrl,"New tab",newSession()) }
     }
     private fun persistTabs() {
-        val persistentTabs = tabs.filterNot { it.privateMode }
-        val arr=JSONArray(); persistentTabs.forEach { arr.put(JSONObject().put("id",it.id).put("url",it.url).put("title",it.title)) }
-        val persistentActive = current()?.takeUnless { it.privateMode }?.id ?: persistentTabs.firstOrNull()?.id ?: 0L
-        prefs.edit().putString("tabs",arr.toString()).putLong("active",persistentActive).apply()
+        if (isDestroyed) return
+        tabSaveHandler.removeCallbacks(saveTabs)
+        tabSaveHandler.postDelayed(saveTabs, 350L)
+    }
+
+    private fun persistTabsNow() {
+        tabSaveHandler.removeCallbacks(saveTabs)
+        // Copy mutable tab metadata on the UI thread. JSON encoding and disk I/O
+        // happen on a single process-owned worker, outside Android's apply()
+        // queue, which Android otherwise drains while stopping an Activity.
+        val snapshot = tabs.filterNot { it.privateMode }.map { SavedBrowserTab(it.id, it.url, it.title) }
+        val persistentActive = current()?.takeUnless { it.privateMode }?.id ?: snapshot.firstOrNull()?.id ?: 0L
+        BrowserStatePersistence.sessionSnapshot = BrowserSessionSnapshot(snapshot, persistentActive)
+        val storage = prefs
+        BrowserStatePersistence.write("tabs") {
+            val arr = JSONArray()
+            snapshot.forEach { (id, url, title) ->
+                arr.put(JSONObject().put("id", id).put("url", url).put("title", title))
+            }
+            check(storage.edit().putString("tabs", arr.toString()).putLong("active", persistentActive).commit())
+        }
     }
 
     private fun message(title:String,text:String) { AlertDialog.Builder(this).setTitle(title).setMessage(text).setPositiveButton("Got it",null).show().styleDialog() }
@@ -3342,6 +3391,26 @@ class MainActivity : Activity() {
     }
 
     override fun onBackPressed() { if(screen!="browser")showBrowser() else current()?.session?.goBack() ?: super.onBackPressed() }
-    override fun onPause() { super.onPause(); persistTabs(); persistPrivacyCounts() }
-    override fun onDestroy() { localAiDownloadPoll.removeCallbacks(pollLocalAiDownload); localAiHarness.close(); persistPrivacyCounts(); super.onDestroy(); tabs.forEach { if(it.session.isOpen) it.session.close() } }
+    override fun onResume() {
+        super.onResume()
+        browserResumed = true
+        current()?.session?.takeIf { it.isOpen }?.setActive(true)
+    }
+
+    override fun onPause() {
+        browserResumed = false
+        current()?.session?.takeIf { it.isOpen }?.setActive(false)
+        persistTabsNow()
+        persistPrivacyCounts()
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        tabSaveHandler.removeCallbacks(saveTabs)
+        privacyCountHandler.removeCallbacks(savePrivacyCounts)
+        localAiDownloadPoll.removeCallbacks(pollLocalAiDownload)
+        localAiHarness.close()
+        super.onDestroy()
+        tabs.forEach { if (it.session.isOpen) it.session.close() }
+    }
 }
