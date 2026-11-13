@@ -1,5 +1,22 @@
 # Quest 3S reopening review — 2026-11-10
 
+## Follow-up on 2026-11-12
+
+The user reports that the previous reopening crash no longer occurs with the
+test APK, but that YouTube and Spotify load slowly in Chromium, and switching
+to Gecko or opening Aster tools can crash. The shared crash summary reports
+`ClassCastException` without a stack trace. Chromium settings contained an
+invalid Activity cast in both actions and sent the engine action to the wrong
+Activity. Patch 0040 fixes these source defects and transfers regular tabs only
+when the correct browser window is safely identifiable. The fix has not yet
+been built into the published APK or tested on the headset; the summary alone
+does not prove that all reported Gecko crashes have the same cause.
+
+The slow page loads have not been measured or diagnosed. The test APK is a
+Java-debuggable build, which disables some build optimizations, but its impact
+on these pages is unknown. Device timings and a comparison with desktop-site
+mode disabled are needed before attributing the slowdown to a cause.
+
 The user reports that the newest Aster release opens after installation but shows
 “app isn't responding” when reopened after closing. Both Chromium and Gecko are
 affected on Quest 3S; Chromium is the priority. No headset ANR trace was supplied.

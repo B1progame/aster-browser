@@ -6,6 +6,8 @@
 
 **Quest 3S reopening investigation:** this fork contains startup and persistence hardening for the reported “app isn't responding” after closing and reopening either engine. An ARM64 candidate was built on 2026-11-12 and published as a `v5.1.0` test release, but the APK internally reports version 5.0.0 and the hang has not been reproduced or verified fixed on a headset. Its signing key differs from upstream v5, so it cannot directly update that installed release. Existing upstream v5 APKs do **not** contain these changes. See [the review, checks, limitations, and device test procedure](docs/QUEST_REOPEN_REVIEW.md).
 
+**Quest follow-up:** the user reports the reopening crash no longer occurs, but reports slow Chromium media sites and crashes opening Gecko or Aster tools. A source fix for a settings crash is available; it is not yet included in the published APK or verified on the headset. See the review for details.
+
 [Releases](https://github.com/B1progame/aster-browser/releases) · [Open issues](https://github.com/B1progame/aster-browser/issues) · [Roadmap](docs/ROADMAP.md)
 
 ## Screenshots and feature tour
